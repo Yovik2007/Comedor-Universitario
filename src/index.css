@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* =========================================================
+   Paleta institucional del UNJFSC Comedor digital
+   ========================================================= */
+@theme {
+  --font-sans:
+    "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial,
+    sans-serif;
+
+  /* Azul institucional */
+  --color-primary: #123b6d;
+  --color-primary-600: #1a4d8c;
+  --color-primary-700: #0e2e56;
+  --color-primary-50: #eef3fa;
+
+  /* Azul secundario */
+  --color-secondary: #2563eb;
+  --color-secondary-600: #1d4ed8;
+  --color-secondary-50: #eff6ff;
+
+  /* Celeste */
+  --color-accent: #38bdf8;
+  --color-accent-600: #0ea5e9;
+  --color-accent-50: #f0f9ff;
+
+  /* Neutros */
+  --color-surface: #f3f4f6;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-line: #e5e7eb;
+
+  /* Estados */
+  --color-success: #16a34a;
+  --color-success-50: #f0fdf4;
+  --color-success-700: #15803d;
+  --color-danger: #dc2626;
+  --color-danger-50: #fef2f2;
+  --color-danger-700: #b91c1c;
+  --color-warning: #d97706;
+  --color-warning-50: #fffbeb;
+  --color-warning-700: #b45309;
+
+  --radius-card: 0.875rem;
+  --shadow-soft:
+    0 1px 3px rgba(15, 23, 42, 0.06), 0 12px 32px -14px rgba(15, 23, 42, 0.18);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .card {
+    background-color: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+  }
+}
+
+/* Animaciones suaves para modales, paneles y toasts */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out both;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
