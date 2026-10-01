@@ -1,0 +1,58 @@
+name: Desplegar en GitHub Pages
+
+# Se ejecuta con cada push a main (y también a mano desde la pestaña Actions).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permisos mínimos que exige GitHub Pages (deploy con token de corta duración).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# No lanzar dos despliegues a la vez.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar (con base /Comedor-Universitario/)
+        run: npm run build
+        env:
+          GITHUB_PAGES: "1"
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Subir artefacto (dist/)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar sitio
+        id: deployment
+        uses: actions/deploy-pages@v4

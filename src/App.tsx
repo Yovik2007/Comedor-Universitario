@@ -26,6 +26,12 @@ import type { UserRole } from "@/types";
 
 const homeOf = (role: UserRole) => (role === "admin" ? "/admin" : "/student");
 
+/**
+ * Base del router: "/" en local y "/Comedor-Universitario" cuando la app
+ * se sirve desde GitHub Pages (lo define `base` en vite.config.ts).
+ */
+const routerBasename = import.meta.env.BASE_URL.replace(/\/+$/, "");
+
 /** Guarda de sesión: exige login y, opcionalmente, un rol específico. */
 function RequireAuth({ role }: { role?: UserRole }) {
   const { session } = useApp();
@@ -57,7 +63,7 @@ export default function App() {
   return (
     <ToastProvider>
       <AppProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={routerBasename}>
           <Toaster />
           <Routes>
             <Route path="/" element={<HomeRedirect />} />

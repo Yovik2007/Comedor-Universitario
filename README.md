@@ -33,6 +33,24 @@ Otros comandos:
 | `npm run preview`   | Sirve la compilación de producción                     |
 | `npm run typecheck` | Solo verifica TypeScript                               |
 
+## Sitio publicado (GitHub Pages)
+
+El repositorio incluye el workflow **`.github/workflows/deploy.yml`**, que compila y
+publica la app en **https://yovik2007.github.io/Comedor-Universitario/** con cada `push`
+a `main` (también se puede lanzar a mano desde la pestaña *Actions*).
+
+Único paso manual, solo una vez: en GitHub → **Settings → Pages → Build and deployment →
+Source** → elegir **GitHub Actions**.
+
+Cómo está resuelto:
+
+- `GITHUB_PAGES=1 npm run build` compila con `base: "/Comedor-Universitario/"`; las
+  compilaciones normales siguen usando `/`, sin cambiar nada del desarrollo local.
+- El router usa `basename` derivado de `import.meta.env.BASE_URL`, así que las rutas son
+  idénticas en local y en Pages (`/login`, `/admin`, ...).
+- El build genera `404.html` (copia del shell de la app) para que al recargar una ruta
+  directa como `.../admin` GitHub Pages sirva la SPA en vez de un 404 real.
+
 ## Usuarios de demostración
 
 Toca una cuenta en la pantalla de login y se autocompletan correo y contraseña.
