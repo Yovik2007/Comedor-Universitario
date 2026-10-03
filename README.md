@@ -53,7 +53,9 @@ Cómo está resuelto:
 
 ## Usuarios de demostración
 
-Toca una cuenta en la pantalla de login y se autocompletan correo y contraseña.
+Toca **«Ver cuentas de demostración»** (debajo del formulario) y elige una cuenta:
+se autocompletan correo y contraseña. Las cuentas están ocultas por defecto para que
+el login muestre solo los campos de correo y contraseña.
 
 | Rol                   | Correo                     | Contraseña |
 | --------------------- | -------------------------- | ---------- |

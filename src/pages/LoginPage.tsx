@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   ShieldCheck,
   UtensilsCrossed,
+  Users,
   Zap,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
@@ -60,6 +61,8 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Las cuentas demo quedan ocultas por defecto: el login muestra solo el formulario.
+  const [showDemo, setShowDemo] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -216,65 +219,86 @@ export function LoginPage() {
             </form>
           </div>
 
-          {/* Cuentas de demostración */}
-          <div className="card mt-5 p-5">
-            <p className="text-sm font-bold text-ink">Usuarios de demostración</p>
-            <p className="mt-0.5 text-xs text-muted">
-              Toca una cuenta para autocompletar el formulario.
-            </p>
+          {/* Cuentas de demostración: ocultas por defecto para dejar solo el formulario */}
+          <div className="mt-5 flex flex-col items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowDemo((v) => !v)}
+              aria-expanded={showDemo}
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-primary transition hover:border-secondary/60 hover:text-secondary"
+            >
+              <Users size={14} />
+              {showDemo
+                ? "Ocultar cuentas de demostración"
+                : "Ver cuentas de demostración"}
+            </button>
 
-            <div className="mt-3 space-y-3">
-              {accountGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    <group.icon size={12} />
-                    {group.label}
-                  </p>
-
-                  <div className="space-y-2">
-                    {group.accounts.map((acc) => (
-                      <button
-                        key={acc.email}
-                        type="button"
-                        onClick={() => fillDemo(acc.email, acc.password)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-surface/60 px-3 py-2 text-left transition hover:border-secondary/60 hover:bg-secondary-50"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-ink">
-                            {acc.email}
-                          </p>
-                          <p className="truncate text-xs text-muted">
-                            {acc.nombre}
-                            {acc.tipo ? ` · ${acc.tipo}` : ""}
-                          </p>
-                        </div>
-                        <code className="shrink-0 rounded bg-white px-2 py-1 text-xs font-semibold text-primary ring-1 ring-line">
-                          {acc.password}
-                        </code>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <p className="mt-4 text-xs text-muted">
-              También funciona cualquier correo institucional de los 12
-              estudiantes (p. ej.{" "}
-              <span className="font-semibold text-ink">
-                ana.flores@universidad.edu.pe
-              </span>
-              ) con la contraseña{" "}
-              <span className="font-semibold text-ink">123456</span>.
-            </p>
-
-            <p className="mt-3 text-center text-xs text-muted">
+            <p className="text-center text-xs text-muted">
               Los datos de esta demostración son simulados.{" "}
-              <Link to="/kiosco" className="font-semibold text-secondary hover:underline">
+              <Link
+                to="/kiosco"
+                className="font-semibold text-secondary hover:underline"
+              >
                 Ir al kiosco
               </Link>
             </p>
           </div>
+
+          {showDemo && (
+            <div className="card mt-4 p-5">
+              <p className="text-sm font-bold text-ink">
+                Usuarios de demostración
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                Toca una cuenta para autocompletar el formulario.
+              </p>
+
+              <div className="mt-3 space-y-3">
+                {accountGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      <group.icon size={12} />
+                      {group.label}
+                    </p>
+
+                    <div className="space-y-2">
+                      {group.accounts.map((acc) => (
+                        <button
+                          key={acc.email}
+                          type="button"
+                          onClick={() => fillDemo(acc.email, acc.password)}
+                          className="flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-surface/60 px-3 py-2 text-left transition hover:border-secondary/60 hover:bg-secondary-50"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-ink">
+                              {acc.email}
+                            </p>
+                            <p className="truncate text-xs text-muted">
+                              {acc.nombre}
+                              {acc.tipo ? ` · ${acc.tipo}` : ""}
+                            </p>
+                          </div>
+                          <code className="shrink-0 rounded bg-white px-2 py-1 text-xs font-semibold text-primary ring-1 ring-line">
+                            {acc.password}
+                          </code>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-4 text-xs text-muted">
+                También funciona cualquier correo institucional de los 12
+                estudiantes (p. ej.{" "}
+                <span className="font-semibold text-ink">
+                  ana.flores@universidad.edu.pe
+                </span>
+                ) con la contraseña{" "}
+                <span className="font-semibold text-ink">123456</span>.
+              </p>
+            </div>
+          )}
         </div>
       </section>
     </div>
