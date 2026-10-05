@@ -97,3 +97,45 @@ export interface ValidationOutcome {
   message: string;
   reservation?: Reservation;
 }
+
+/* ---------------------------------------------------------
+   Encuestas de comidas
+   --------------------------------------------------------- */
+
+export interface SurveyOption {
+  /** Identificador único dentro de su encuesta: "opt-1", "opt-2"... */
+  id: string;
+  label: string;
+}
+
+export interface Survey {
+  /** Código visible: "ENC-001". */
+  id: string;
+  title: string;
+  question: string;
+  options: SurveyOption[];
+  /** true = abierta para votar; false = cerrada (solo se ven resultados). */
+  active: boolean;
+  createdAt: string;
+}
+
+export interface SurveyResponse {
+  /** Código visible: "RESP-001". */
+  id: string;
+  surveyId: string;
+  studentId: string;
+  studentName: string;
+  /** Comidas marcadas por el estudiante (una respuesta puede tener varias). */
+  optionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Votos agregados de una opción (para las barras de resultados). */
+export interface SurveyResultRow {
+  optionId: string;
+  label: string;
+  votes: number;
+  /** Porcentaje sobre el total de respuestas (0-100). */
+  percent: number;
+}

@@ -5,6 +5,7 @@ import {
   Info,
   LayoutDashboard,
   TicketCheck,
+  Vote,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { SidebarItem } from "@/components/layout/Sidebar";
@@ -17,6 +18,7 @@ const navItems: SidebarItem[] = [
   { to: "/student", label: "Inicio", icon: LayoutDashboard, end: true },
   { to: "/student/reservar", label: "Reservar", icon: CalendarPlus },
   { to: "/student/reservas", label: "Mis reservas", icon: TicketCheck },
+  { to: "/student/encuestas", label: "Encuestas", icon: Vote },
   { to: "/student/informacion", label: "Información", icon: Info },
 ];
 

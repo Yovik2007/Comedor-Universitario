@@ -11,12 +11,14 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { HomePage } from "@/pages/student/HomePage";
 import { ReservePage } from "@/pages/student/ReservePage";
 import { MyReservationsPage } from "@/pages/student/MyReservationsPage";
+import { SurveysPage } from "@/pages/student/SurveysPage";
 import { InfoPage } from "@/pages/student/InfoPage";
 
 import { DashboardPage } from "@/pages/admin/DashboardPage";
 import { ReservationsPage } from "@/pages/admin/ReservationsPage";
 import { CupsPage } from "@/pages/admin/CupsPage";
 import { StudentsPage } from "@/pages/admin/StudentsPage";
+import { SurveyManagementPage } from "@/pages/admin/SurveyManagementPage";
 import { ValidationPage } from "@/pages/admin/ValidationPage";
 import { SettingsPage } from "@/pages/admin/SettingsPage";
 
@@ -75,6 +77,7 @@ export default function App() {
                 <Route index element={<HomePage />} />
                 <Route path="reservar" element={<ReservePage />} />
                 <Route path="reservas" element={<MyReservationsPage />} />
+                <Route path="encuestas" element={<SurveysPage />} />
                 <Route path="informacion" element={<InfoPage />} />
               </Route>
             </Route>
@@ -86,6 +89,7 @@ export default function App() {
                 <Route path="reservas" element={<ReservationsPage />} />
                 <Route path="cupos" element={<CupsPage />} />
                 <Route path="estudiantes" element={<StudentsPage />} />
+                <Route path="encuestas" element={<SurveyManagementPage />} />
                 <Route path="validacion" element={<ValidationPage />} />
                 <Route path="configuracion" element={<SettingsPage />} />
               </Route>

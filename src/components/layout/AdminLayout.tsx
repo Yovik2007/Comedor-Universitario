@@ -5,6 +5,7 @@ import {
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
+  ListChecks,
   ScanLine,
   Settings,
   SlidersHorizontal,
@@ -20,6 +21,7 @@ const navItems: SidebarItem[] = [
   { to: "/admin/reservas", label: "Reservas", icon: ClipboardList },
   { to: "/admin/cupos", label: "Cupos", icon: SlidersHorizontal },
   { to: "/admin/estudiantes", label: "Estudiantes", icon: GraduationCap },
+  { to: "/admin/encuestas", label: "Encuestas", icon: ListChecks },
   { to: "/admin/validacion", label: "Validación", icon: BadgeCheck },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings },
 ];

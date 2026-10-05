@@ -9,6 +9,8 @@ export const STORAGE_KEYS = {
   students: "comedor_students",
   meals: "comedor_meal_availability",
   settings: "comedor_settings",
+  surveys: "comedor_surveys",
+  surveyResponses: "comedor_survey_responses",
   seedDate: "comedor_seed_date",
 } as const;
 

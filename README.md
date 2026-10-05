@@ -86,11 +86,13 @@ El patrón es `nombre.apellido@universidad.edu.pe` (ver `src/data/mockData.ts`).
 | `/student`          | Inicio del estudiante (resumen del día)                |
 | `/student/reservar` | Reservar desayuno, almuerzo o cena                     |
 | `/student/reservas` | Mis reservas (activas / historial) con QR              |
+| `/student/encuestas` | Encuestas de comidas: votar y ver resultados          |
 | `/student/informacion` | Horarios, reglas y datos del comedor                |
 | `/admin`            | Dashboard con indicadores y gráficos                   |
 | `/admin/reservas`   | Tabla de reservas con filtros y detalle                |
 | `/admin/cupos`      | Cupos por servicio y cierre/apertura de reservas       |
 | `/admin/estudiantes`| Alta, búsqueda y baja de estudiantes                   |
+| `/admin/encuestas`  | Crear encuestas, abrirlas/cerrarlas y ver resultados   |
 | `/admin/validacion` | Validación de reservas por código                      |
 | `/admin/configuracion` | Restablecer datos de demostración e información      |
 | `/kiosco`           | Kiosco de validación de acceso                         |
@@ -108,6 +110,10 @@ administrativo ni viceversa; sin sesión, todo redirige a `/login`.
   cancelar libera el cupo inmediatamente.
 - Mis reservas con pestañas **Activas** e **Historial**, código `RES-XXXXX` y **QR simulado**.
 - Estados: `Activa`, `Utilizada`, `Cancelada`.
+- **Encuestas de comidas**: vota qué platos quieres ver marcando **varias opciones**,
+  cambia tu respuesta mientras la encuesta esté abierta y consulta los resultados
+  en vivo (barras con votos y porcentaje). Las encuestas cerradas muestran los
+  resultados finales.
 
 ### Administrador
 
@@ -120,10 +126,15 @@ administrativo ni viceversa; sin sesión, todo redirige a `/login`.
 - Interruptor **Reservas habilitadas**: al apagarse, los estudiantes ven
   *“Las reservas se encuentran temporalmente cerradas.”*
 - Gestión de estudiantes: alta, búsqueda, filtro por tipo, alta/baja de cuentas.
+- **Encuestas de comidas**:
+  - creación con título, pregunta y de 2 a 10 opciones (con validación);
+  - interruptor **abierta/cerrada**: cerrada deja de aceptar votos;
+  - resultados en tiempo real por opción (votos y porcentaje);
+  - eliminación con confirmación (borra también sus respuestas).
 - Validación por código con estados `✓ RESERVA VÁLIDA`, `⚠ Reserva ya utilizada`,
   `✕ Reserva cancelada` y `✕ Reserva no encontrada`.
 - **Restablecer datos de demostración** con confirmación (restaura estudiantes,
-  reservas, cupos y configuración originales).
+  reservas, cupos, configuración y encuestas originales).
 
 ### Kiosco
 
@@ -151,6 +162,8 @@ Los datos se guardan en `localStorage` bajo estas claves:
 | `comedor_students`           | Estudiantes                      |
 | `comedor_meal_availability`  | Cupos por servicio               |
 | `comedor_settings`           | Configuración (reservas abiertas)|
+| `comedor_surveys`            | Encuestas de comidas              |
+| `comedor_survey_responses`   | Respuestas a las encuestas        |
 | `comedor_seed_date`          | Fecha de generación de datos     |
 
 Los cupos disponibles siempre se **calculan** a partir de las reservas del día
@@ -162,17 +175,20 @@ Los cupos disponibles siempre se **calculan** a partir de las reservas del día
 src/
 ├── components/
 │   ├── layouts/        StudentLayout, AdminLayout, Sidebar, Header
+│   ├── survey/         SurveyResultsBars (barras de resultados)
 │   └── ui/             Button, Badge, Modal, StatCard, Table, Toast, Switch...
 ├── pages/
-│   ├── student/        HomePage, ReservePage, MyReservationsPage, InfoPage
+│   ├── student/        HomePage, ReservePage, MyReservationsPage,
+│   │                   SurveysPage, InfoPage
 │   ├── admin/          DashboardPage, ReservationsPage, CupsPage,
-│   │                   StudentsPage, ValidationPage, SettingsPage
+│   │                   StudentsPage, SurveyManagementPage,
+│   │                   ValidationPage, SettingsPage
 │   ├── kiosk/          KioskPage
 │   ├── LoginPage.tsx
 │   └── NotFoundPage.tsx
 ├── context/            AppContext (estado global), ToastContext
-├── data/               mockData (estudiantes, cuentas demo, servicios, reservas)
-│                       y brand.ts (nombre y lema del sistema)
+├── data/               mockData (estudiantes, cuentas demo, servicios,
+│                       reservas y encuestas) y brand.ts (nombre y lema)
 ├── types/              Tipos compartidos
 ├── utils/              fechas, almacenamiento, reglas de reserva, formato
 ├── App.tsx             Rutas y guardas de rol

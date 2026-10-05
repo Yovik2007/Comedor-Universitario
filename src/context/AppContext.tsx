@@ -22,15 +22,19 @@ import type {
   Settings,
   Student,
   StudentType,
+  Survey,
+  SurveyResponse,
   UserRole,
   ValidationOutcome,
 } from "@/types";
 import {
   createSeedReservations,
+  createSeedSurveyResponses,
   demoAccounts,
   initialMeals,
   initialSettings,
   initialStudents,
+  initialSurveys,
 } from "@/data/mockData";
 import { STORAGE_KEYS, loadJSON, saveJSON } from "@/utils/storage";
 import { nowISO, todayISO } from "@/utils/dates";
@@ -55,6 +59,13 @@ export interface NewStudentInput {
   password: string;
 }
 
+export interface NewSurveyInput {
+  title: string;
+  question: string;
+  /** Etiquetas en crudo; el contexto las limpia y genera los ids. */
+  options: string[];
+}
+
 interface AppContextValue {
   session: Session | null;
   currentStudent: Student | null;
@@ -62,6 +73,8 @@ interface AppContextValue {
   reservations: Reservation[];
   meals: Meal[];
   settings: Settings;
+  surveys: Survey[];
+  surveyResponses: SurveyResponse[];
 
   login: (email: string, password: string) => LoginResult;
   logout: () => void;
@@ -81,6 +94,14 @@ interface AppContextValue {
   addStudent: (input: NewStudentInput) => ReserveResult;
   toggleStudentStatus: (studentId: string) => void;
 
+  createSurvey: (input: NewSurveyInput) => ReserveResult;
+  toggleSurvey: (surveyId: string) => void;
+  deleteSurvey: (surveyId: string) => void;
+  submitSurveyResponse: (
+    surveyId: string,
+    optionIds: string[],
+  ) => ReserveResult;
+
   resetDemoData: () => void;
 }
 
@@ -98,6 +119,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [session, setSession] = useState<Session | null>(() =>
     loadJSON<Session | null>(STORAGE_KEYS.session, null),
+  );
+  const [surveys, setSurveys] = useState<Survey[]>(() =>
+    loadJSON(STORAGE_KEYS.surveys, initialSurveys),
+  );
+  const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>(
+    () => loadJSON(STORAGE_KEYS.surveyResponses, createSeedSurveyResponses()),
   );
 
   // Las reservas de muestra se regeneran si cambió el día desde la última visita.
@@ -137,6 +164,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (session) saveJSON(STORAGE_KEYS.session, session);
     else saveJSON(STORAGE_KEYS.session, null);
   }, [session]);
+
+  useEffect(() => {
+    saveJSON(STORAGE_KEYS.surveys, surveys);
+  }, [surveys]);
+
+  useEffect(() => {
+    saveJSON(STORAGE_KEYS.surveyResponses, surveyResponses);
+  }, [surveyResponses]);
 
   /* -------------------------------------------------
      Sesión
@@ -483,6 +518,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /* -------------------------------------------------
+     Encuestas de comidas
+     ------------------------------------------------- */
+
+  const createSurvey = useCallback(
+    (input: NewSurveyInput): ReserveResult => {
+      const title = input.title.trim();
+      const question = input.question.trim();
+      const options = input.options.map((o) => o.trim()).filter(Boolean);
+
+      if (!title || !question) {
+        return { ok: false, message: "El título y la pregunta son obligatorios." };
+      }
+      if (options.length < 2) {
+        return { ok: false, message: "Agrega al menos dos opciones." };
+      }
+      const normalized = options.map((o) => o.toLowerCase());
+      if (new Set(normalized).size !== normalized.length) {
+        return { ok: false, message: "Las opciones deben ser distintas." };
+      }
+
+      const nextNumber = surveys.reduce((acc, s) => {
+        const n = Number(s.id.replace(/\D/g, ""));
+        return Number.isFinite(n) && n > acc ? n : acc;
+      }, 0);
+
+      const survey: Survey = {
+        id: `ENC-${String(nextNumber + 1).padStart(3, "0")}`,
+        title,
+        question,
+        options: options.map((label, index) => ({
+          id: `opt-${index + 1}`,
+          label,
+        })),
+        active: true,
+        createdAt: nowISO(),
+      };
+
+      setSurveys((prev) => [survey, ...prev]);
+      return {
+        ok: true,
+        message: `Encuesta «${title}» creada y abierta para votar.`,
+      };
+    },
+    [surveys],
+  );
+
+  const toggleSurvey = useCallback((surveyId: string) => {
+    setSurveys((prev) =>
+      prev.map((s) => (s.id === surveyId ? { ...s, active: !s.active } : s)),
+    );
+  }, []);
+
+  const deleteSurvey = useCallback((surveyId: string) => {
+    setSurveys((prev) => prev.filter((s) => s.id !== surveyId));
+    setSurveyResponses((prev) => prev.filter((r) => r.surveyId !== surveyId));
+  }, []);
+
+  const submitSurveyResponse = useCallback(
+    (surveyId: string, optionIds: string[]): ReserveResult => {
+      if (!session) {
+        return { ok: false, message: "Debes iniciar sesión para votar." };
+      }
+
+      const survey = surveys.find((s) => s.id === surveyId);
+      if (!survey) return { ok: false, message: "Encuesta no encontrada." };
+      if (!survey.active) {
+        return { ok: false, message: "Esta encuesta ya está cerrada." };
+      }
+
+      const valid = optionIds.filter((id) =>
+        survey.options.some((o) => o.id === id),
+      );
+      if (valid.length === 0) {
+        return { ok: false, message: "Selecciona al menos una comida." };
+      }
+
+      const student = currentStudent;
+      if (!student) {
+        return { ok: false, message: "No se encontró tu perfil de estudiante." };
+      }
+
+      const existing = surveyResponses.find(
+        (r) => r.surveyId === surveyId && r.studentId === student.id,
+      );
+
+      if (existing) {
+        setSurveyResponses((prev) =>
+          prev.map((r) =>
+            r.id === existing.id
+              ? { ...r, optionIds: valid, updatedAt: nowISO() }
+              : r,
+          ),
+        );
+        return { ok: true, message: "Tu respuesta fue actualizada." };
+      }
+
+      const nextNumber = surveyResponses.reduce((acc, r) => {
+        const n = Number(r.id.replace(/\D/g, ""));
+        return Number.isFinite(n) && n > acc ? n : acc;
+      }, 0);
+
+      setSurveyResponses((prev) => [
+        ...prev,
+        {
+          id: `RESP-${String(nextNumber + 1).padStart(3, "0")}`,
+          surveyId,
+          studentId: student.id,
+          studentName: student.nombre,
+          optionIds: valid,
+          createdAt: nowISO(),
+          updatedAt: nowISO(),
+        },
+      ]);
+      return { ok: true, message: "¡Gracias! Tu voto quedó registrado." };
+    },
+    [currentStudent, session, surveyResponses, surveys],
+  );
+
+  /* -------------------------------------------------
      Restablecer demostración
      ------------------------------------------------- */
 
@@ -491,6 +645,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMeals(initialMeals);
     setSettings(initialSettings);
     setReservations(createSeedReservations());
+    setSurveys(initialSurveys);
+    setSurveyResponses(createSeedSurveyResponses());
     saveJSON(STORAGE_KEYS.seedDate, todayISO());
   }, []);
 
@@ -506,6 +662,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reservations,
       meals,
       settings,
+      surveys,
+      surveyResponses,
       login,
       logout,
       reserve,
@@ -517,6 +675,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReservasHabilitadas,
       addStudent,
       toggleStudentStatus,
+      createSurvey,
+      toggleSurvey,
+      deleteSurvey,
+      submitSurveyResponse,
       resetDemoData,
     }),
     [
@@ -526,6 +688,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reservations,
       meals,
       settings,
+      surveys,
+      surveyResponses,
       login,
       logout,
       reserve,
@@ -537,6 +701,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReservasHabilitadas,
       addStudent,
       toggleStudentStatus,
+      createSurvey,
+      toggleSurvey,
+      deleteSurvey,
+      submitSurveyResponse,
       resetDemoData,
     ],
   );

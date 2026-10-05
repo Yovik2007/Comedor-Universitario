@@ -11,6 +11,8 @@ import type {
   ReservationStatus,
   Settings,
   Student,
+  Survey,
+  SurveyResponse,
 } from "@/types";
 import { addDays, todayISO } from "@/utils/dates";
 
@@ -248,6 +250,96 @@ export function createSeedReservations(): Reservation[] {
         ...(row.status === "Utilizada"
           ? { usedAt: `${date}T12:35:00` }
           : {}),
+      },
+    ];
+  });
+}
+
+/* ---------------------------------------------------------
+   Encuestas de comidas (muestra)
+   --------------------------------------------------------- */
+
+export const initialSurveys: Survey[] = [
+  {
+    id: "ENC-001",
+    title: "Menú preferido del mes",
+    question:
+      "¿Qué comidas te gustaría ver en el comedor este mes? Puedes marcar varias.",
+    options: [
+      { id: "opt-1", label: "Lomo saltado" },
+      { id: "opt-2", label: "Ají de gallina" },
+      { id: "opt-3", label: "Ceviche" },
+      { id: "opt-4", label: "Arroz chaufa" },
+      { id: "opt-5", label: "Lasaña" },
+      { id: "opt-6", label: "Pollo a la brasa" },
+    ],
+    active: true,
+    createdAt: `${addDays(todayISO(), -3)}T09:30:00`,
+  },
+  {
+    id: "ENC-002",
+    title: "Plato estrella de la semana pasada",
+    question: "¿Cuál fue el plato que más te gustó de la semana anterior?",
+    options: [
+      { id: "opt-1", label: "Causa limeña" },
+      { id: "opt-2", label: "Seco de carne" },
+      { id: "opt-3", label: "Tallarín rojo" },
+    ],
+    active: false,
+    createdAt: `${addDays(todayISO(), -10)}T16:00:00`,
+  },
+];
+
+interface SurveySeedRow {
+  survey: string;
+  student: string;
+  options: string[];
+}
+
+const surveySeedRows: SurveySeedRow[] = [
+  // ---- ENC-001 (abierta): 10 estudiantes ya votaron ----
+  { survey: "ENC-001", student: "EST001", options: ["opt-1", "opt-5"] },
+  { survey: "ENC-001", student: "EST002", options: ["opt-2"] },
+  { survey: "ENC-001", student: "EST003", options: ["opt-1", "opt-3"] },
+  { survey: "ENC-001", student: "EST004", options: ["opt-2", "opt-6"] },
+  { survey: "ENC-001", student: "EST005", options: ["opt-1"] },
+  { survey: "ENC-001", student: "EST006", options: ["opt-3", "opt-5"] },
+  { survey: "ENC-001", student: "EST007", options: ["opt-4"] },
+  { survey: "ENC-001", student: "EST008", options: ["opt-2", "opt-5"] },
+  { survey: "ENC-001", student: "EST010", options: ["opt-1", "opt-6"] },
+  { survey: "ENC-001", student: "EST011", options: ["opt-3"] },
+
+  // ---- ENC-002 (cerrada): 6 respuestas ----
+  { survey: "ENC-002", student: "EST001", options: ["opt-1"] },
+  { survey: "ENC-002", student: "EST003", options: ["opt-2"] },
+  { survey: "ENC-002", student: "EST004", options: ["opt-1"] },
+  { survey: "ENC-002", student: "EST006", options: ["opt-3"] },
+  { survey: "ENC-002", student: "EST007", options: ["opt-1"] },
+  { survey: "ENC-002", student: "EST009", options: ["opt-2"] },
+];
+
+/**
+ * Respuestas de muestra, determinísticas (siempre las mismas) para que la
+ * demostración nunca empiece con los resultados vacíos.
+ */
+export function createSeedSurveyResponses(): SurveyResponse[] {
+  const studentsById = new Map(initialStudents.map((s) => [s.id, s]));
+  const today = todayISO();
+
+  return surveySeedRows.flatMap<SurveyResponse>((row, index) => {
+    const student = studentsById.get(row.student);
+    if (!student) return [];
+
+    const date = addDays(today, row.survey === "ENC-001" ? -2 : -9);
+    return [
+      {
+        id: `RESP-${String(index + 1).padStart(3, "0")}`,
+        surveyId: row.survey,
+        studentId: student.id,
+        studentName: student.nombre,
+        optionIds: row.options,
+        createdAt: `${date}T11:15:00`,
+        updatedAt: `${date}T11:15:00`,
       },
     ];
   });
