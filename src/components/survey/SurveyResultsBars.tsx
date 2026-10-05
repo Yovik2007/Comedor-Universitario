@@ -1,24 +1,21 @@
-import { computeSurveyResults } from "@/utils/surveyUtils";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import type { Survey, SurveyResponse } from "@/types";
+import type { SurveyResultRow } from "@/types";
 
 interface SurveyResultsBarsProps {
-  survey: Survey;
-  responses: SurveyResponse[];
+  /** Votos y porcentaje de cada opción (contexto.getSurveyResults). */
+  results: SurveyResultRow[];
+  /** Número de estudiantes que respondieron (contexto.getSurveyTotal). */
+  total: number;
 }
 
 /**
  * Barras de resultados de una encuesta (las usan el estudiante y el admin).
+ * Los datos llegan ya agregados: en modo Supabase los calcula la base
+ * (vw_survey_results) y solo contiene conteos, nunca quién votó qué.
  * El porcentaje es sobre respuestas, porque cada estudiante puede marcar
  * varias comidas.
  */
-export function SurveyResultsBars({
-  survey,
-  responses,
-}: SurveyResultsBarsProps) {
-  const rows = computeSurveyResults(survey, responses);
-  const total = responses.filter((r) => r.surveyId === survey.id).length;
-
+export function SurveyResultsBars({ results, total }: SurveyResultsBarsProps) {
   if (total === 0) {
     return (
       <p className="rounded-lg bg-surface/70 px-3.5 py-3 text-sm text-muted">
@@ -27,11 +24,11 @@ export function SurveyResultsBars({
     );
   }
 
-  const maxVotes = Math.max(...rows.map((r) => r.votes));
+  const maxVotes = Math.max(...results.map((r) => r.votes));
 
   return (
     <div className="space-y-3.5">
-      {rows.map((row) => (
+      {results.map((row) => (
         <div key={row.optionId}>
           <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
             <span className="min-w-0 truncate font-medium text-ink">

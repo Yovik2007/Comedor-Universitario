@@ -20,8 +20,13 @@ export const isSupabaseEnabled = Boolean(url && anonKey);
 /** Cliente REST de Supabase (null si no hay credenciales). */
 export const supabase: SupabaseClient | null = isSupabaseEnabled
   ? createClient(url, anonKey, {
-      // La autenticación es simulada: la sesión solo vive en localStorage.
-      auth: { persistSession: false, autoRefreshToken: false },
+      // Sesión real de Supabase Auth: se guarda en el navegador y se
+      // renueva sola, así el usuario sigue conectado al recargar.
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
     })
   : null;
 

@@ -10,7 +10,6 @@ import { Field, inputCls } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { SurveyResultsBars } from "@/components/survey/SurveyResultsBars";
-import { countSurveyResponses } from "@/utils/surveyUtils";
 import type { Survey } from "@/types";
 
 const EMPTY_FORM = {
@@ -22,8 +21,14 @@ const EMPTY_FORM = {
 const MAX_OPTIONS = 10;
 
 export function SurveyManagementPage() {
-  const { surveys, surveyResponses, createSurvey, toggleSurvey, deleteSurvey } =
-    useApp();
+  const {
+    surveys,
+    createSurvey,
+    toggleSurvey,
+    deleteSurvey,
+    getSurveyResults,
+    getSurveyTotal,
+  } = useApp();
   const { push } = useToast();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -124,7 +129,7 @@ export function SurveyManagementPage() {
       ) : (
         <div className="space-y-6">
           {ordered.map((survey) => {
-            const total = countSurveyResponses(surveyResponses, survey.id);
+            const total = getSurveyTotal(survey.id);
 
             return (
               <article key={survey.id} className="card p-5 sm:p-6">
@@ -154,7 +159,10 @@ export function SurveyManagementPage() {
                   {survey.options.length === 1 ? "opción" : "opciones"})
                 </p>
 
-                <SurveyResultsBars survey={survey} responses={surveyResponses} />
+                <SurveyResultsBars
+                  results={getSurveyResults(survey.id)}
+                  total={getSurveyTotal(survey.id)}
+                />
 
                 <footer className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-4">
                   <div className="min-w-[240px] flex-1">
@@ -304,8 +312,8 @@ export function SurveyManagementPage() {
             Se eliminará la encuesta{" "}
             <span className="font-semibold text-ink">«{toDelete.title}»</span>{" "}
             junto con sus{" "}
-            {countSurveyResponses(surveyResponses, toDelete.id)}{" "}
-            {countSurveyResponses(surveyResponses, toDelete.id) === 1
+            {getSurveyTotal(toDelete.id)}{" "}
+            {getSurveyTotal(toDelete.id) === 1
               ? "respuesta"
               : "respuestas"}
             . Esta acción no se puede deshacer.

@@ -29,6 +29,7 @@ import type {
   StudentType,
   Survey,
   SurveyResponse,
+  SurveyResultRow,
   UserRole,
   ValidationOutcome,
 } from "@/types";
@@ -46,26 +47,37 @@ import { nowISO, todayISO } from "@/utils/dates";
 import {
   availableForType,
   computeMealStats,
+  freeQuota,
   generateReservationCode,
   validateReservationCode,
 } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
+import { computeSurveyResults } from "@/utils/surveyUtils";
 import { isSupabaseEnabled } from "@/lib/supabase";
 import {
+  createAuthUser,
+  currentAuthEmail,
   deleteSurveyRow,
   errorMessage,
   insertReservation,
   insertStudentRow,
   insertSurveyRow,
   loadAppData,
+  loadMealStats,
+  loadSurveyResults,
+  nextReservationCode,
+  nextResponseCode,
   saveResponseRow,
+  sessionFromEmail,
   setSurveyActiveRow,
+  signIn,
+  signOut,
   updateMealRow,
   updateReservationRow,
   updateSettingsRow,
   updateStudentRow,
 } from "@/services/api";
-import type { DataSource } from "@/services/api";
+import type { AppData, DataSource, MealStat, SurveyResultsRow } from "@/services/api";
 import { useToast } from "@/context/ToastContext";
 
 export interface LoginResult {
@@ -97,14 +109,15 @@ interface AppContextValue {
   settings: Settings;
   surveys: Survey[];
   surveyResponses: SurveyResponse[];
-  /** Cuentas de acceso (app_users en Supabase; demo en modo local). */
+  /** Cuentas de demostración que enseña el login (sin contraseñas reales). */
   accounts: DemoAccount[];
   /** true mientras se cargan los datos de la base de datos. */
   loading: boolean;
   /** Dónde están guardados los datos: "supabase" o "local". */
   dataSource: DataSource;
 
-  login: (email: string, password: string) => LoginResult;
+  /** Inicia sesión: valida con Supabase Auth o con las cuentas locales. */
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
 
   reserve: (mealId: MealId) => Promise<ReserveResult>;
@@ -113,6 +126,10 @@ interface AppContextValue {
   validateCode: (code: string) => ValidationOutcome;
 
   getMealStats: (mealId: MealId, date?: string) => MealStats;
+  /** Resultados (votos y %) de una encuesta. */
+  getSurveyResults: (surveyId: string) => SurveyResultRow[];
+  /** Número de estudiantes que respondieron una encuesta. */
+  getSurveyTotal: (surveyId: string) => number;
   updateMeal: (
     mealId: MealId,
     patch: Partial<Pick<Meal, "total" | "becarios" | "horario" | "habilitado">>,
@@ -161,6 +178,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => loadJSON(STORAGE_KEYS.surveyResponses, createSeedSurveyResponses()),
   );
   const [accounts, setAccounts] = useState<DemoAccount[]>(demoAccounts);
+  /** Cupos por servicio/fecha que devuelve vw_meal_stats (solo Supabase). */
+  const [mealStats, setMealStats] = useState<MealStat[]>([]);
+  /** Votos por opción que devuelve vw_survey_results (solo Supabase). */
+  const [surveyResults, setSurveyResults] = useState<SurveyResultsRow[]>([]);
   const [loading, setLoading] = useState(isSupabaseEnabled);
   const [dataSource, setDataSource] = useState<DataSource>(
     isSupabaseEnabled ? "supabase" : "local",
@@ -182,22 +203,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
      Carga inicial desde Supabase
      ------------------------------------------------- */
 
+  /** Copia un conjunto de datos completo al estado. */
+  const applyData = useCallback((data: AppData) => {
+    setStudents(data.students);
+    setAccounts(data.accounts);
+    setMeals(data.meals);
+    setSettings(data.settings);
+    setReservations(data.reservations);
+    setSurveys(data.surveys);
+    setSurveyResponses(data.surveyResponses);
+    setMealStats(data.mealStats);
+    setSurveyResults(data.surveyResults);
+  }, []);
+
+  /**
+   * Al arrancar se comprueba si había una sesión de Supabase Auth guardada.
+   * · Con sesión: se cargan los datos que RLS permite ver a ese usuario.
+   * · Sin sesión: se espera en la pantalla de acceso (sin consultar la base).
+   */
   useEffect(() => {
     if (!isSupabaseEnabled) return;
     let alive = true;
 
     void (async () => {
       try {
-        const { data, source } = await loadAppData();
+        const email = await currentAuthEmail();
         if (!alive) return;
-        setStudents(data.students);
-        setAccounts(data.accounts);
-        setMeals(data.meals);
-        setSettings(data.settings);
-        setReservations(data.reservations);
-        setSurveys(data.surveys);
-        setSurveyResponses(data.surveyResponses);
-        setDataSource(source);
+
+        if (email) {
+          const restored = await sessionFromEmail(email);
+          if (!alive) return;
+
+          if (restored) {
+            const { data, source } = await loadAppData();
+            if (!alive) return;
+            applyData(data);
+            setDataSource(source);
+            setSession(restored);
+          } else {
+            // La cuenta ya no existe o está desactivada.
+            await signOut();
+            setSession(null);
+          }
+        } else {
+          // No hay sesión de Supabase Auth: se descarta cualquier copia
+          // que hubiera quedado en el navegador.
+          setSession(null);
+        }
       } catch (err) {
         if (!alive) return;
         setDataSource("local");
@@ -210,7 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [push]);
+  }, [applyData, push]);
 
   /* -------------------------------------------------
      Persistencia local (copia de respaldo en el navegador)
@@ -250,13 +302,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
      Sesión
      ------------------------------------------------- */
 
+  /**
+   * Inicio de sesión.
+   * · Modo Supabase: se valida con SUPABASE AUTH (contraseña con hash) y,
+   *   después, se cargan los datos que las políticas RLS permiten ver a
+   *   ese usuario (los suyos, o todos si es administrador).
+   * · Modo local: se valida contra las cuentas de demostración, igual que
+   *   siempre, con localStorage.
+   */
   const login = useCallback(
-    (email: string, password: string): LoginResult => {
+    async (email: string, password: string): Promise<LoginResult> => {
       const mail = email.trim().toLowerCase();
       const pass = password.trim();
 
       if (!mail || !pass) {
         return { ok: false, error: "Completa todos los campos." };
+      }
+
+      if (dataSource === "supabase") {
+        const fallo = await signIn(mail, pass);
+        if (fallo) {
+          return { ok: false, error: `No se pudo iniciar sesión: ${fallo}` };
+        }
+
+        let restored: Session | null = null;
+        try {
+          restored = await sessionFromEmail(mail);
+        } catch (err) {
+          await signOut();
+          return {
+            ok: false,
+            error: `No se pudo leer tu cuenta: ${errorMessage(err)}`,
+          };
+        }
+
+        if (!restored) {
+          await signOut();
+          return {
+            ok: false,
+            error:
+              "La cuenta no existe o está deshabilitada. Contacta al administrador.",
+          };
+        }
+
+        try {
+          const { data, source } = await loadAppData();
+          applyData(data);
+          setDataSource(source);
+        } catch (err) {
+          await signOut();
+          return {
+            ok: false,
+            error: `No se pudieron cargar tus datos: ${errorMessage(err)}`,
+          };
+        }
+
+        setSession(restored);
+        return { ok: true, role: restored.role };
       }
 
       const demo = accounts.find((a) => a.email.toLowerCase() === mail);
@@ -316,15 +418,146 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return { ok: true, role: "estudiante" };
     },
-    [accounts, students],
+    [accounts, applyData, dataSource, students],
   );
 
-  const logout = useCallback(() => setSession(null), []);
+  const logout = useCallback(() => {
+    setSession(null);
+    // En Supabase se cierra también la sesión real de Auth.
+    if (isSupabaseEnabled) void signOut();
+  }, []);
+
+  /* -------------------------------------------------
+     Recargas de las vistas de agregados
+     ------------------------------------------------- */
+
+  /** Vuelve a leer los cupos: cambian al reservar, cancelar o editar. */
+  const refreshMealStats = useCallback(async () => {
+    if (dataSource !== "supabase") return;
+    try {
+      setMealStats(await loadMealStats());
+    } catch {
+      // Un fallo aquí no debe arruinar la operación principal.
+    }
+  }, [dataSource]);
+
+  /** Vuelve a leer los resultados: cambian al votar o crear encuestas. */
+  const refreshSurveyResults = useCallback(async () => {
+    if (dataSource !== "supabase") return;
+    try {
+      setSurveyResults(await loadSurveyResults());
+    } catch {
+      // Un fallo aquí no debe arruinar la operación principal.
+    }
+  }, [dataSource]);
 
   const currentStudent = useMemo(() => {
     if (!session?.studentId) return null;
     return students.find((s) => s.id === session.studentId) ?? null;
   }, [session, students]);
+
+  /* -------------------------------------------------
+     Lecturas agregadas (cupos y resultados)
+     ------------------------------------------------- */
+
+  /**
+   * Cupos de un servicio en una fecha.
+   * · Supabase: de vw_meal_stats (calculado en el servidor): así un
+   *   estudiante ve los totales aunque RLS le oculte las reservas ajenas.
+   * · Local:    calculados en memoria con todas las reservas.
+   */
+  const getMealStats = useCallback(
+    (mealId: MealId, date: string = todayISO()): MealStats => {
+      const meal = meals.find((m) => m.id === mealId);
+      if (!meal) {
+        return {
+          becariosQuota: 0,
+          libresQuota: 0,
+          totalQuota: 0,
+          resBecarios: 0,
+          resLibres: 0,
+          resTotal: 0,
+          dispBecarios: 0,
+          dispLibres: 0,
+          dispTotal: 0,
+          percentOcupado: 0,
+        };
+      }
+
+      if (dataSource === "supabase") {
+        const row = mealStats.find(
+          (r) => r.mealId === mealId && r.fecha === date,
+        );
+        if (!row) {
+          // Sin reservas ese día: el servicio está completo y libre.
+          return {
+            becariosQuota: meal.becarios,
+            libresQuota: freeQuota(meal),
+            totalQuota: meal.total,
+            resBecarios: 0,
+            resLibres: 0,
+            resTotal: 0,
+            dispBecarios: meal.becarios,
+            dispLibres: freeQuota(meal),
+            dispTotal: meal.total,
+            percentOcupado: 0,
+          };
+        }
+        return {
+          becariosQuota: row.becarios,
+          libresQuota: Math.max(row.total - row.becarios, 0),
+          totalQuota: row.total,
+          resBecarios: row.resBecarios,
+          resLibres: row.resLibres,
+          resTotal: row.resTotal,
+          dispBecarios: row.dispBecarios,
+          dispLibres: row.dispLibres,
+          dispTotal: row.dispTotal,
+          percentOcupado: row.percentOcupado,
+        };
+      }
+
+      return computeMealStats(meal, reservations, date);
+    },
+    [dataSource, mealStats, meals, reservations],
+  );
+
+  /**
+   * Resultados de una encuesta.
+   * · Supabase: de vw_survey_results (solo conteos, sin nombres).
+   * · Local:    calculados en memoria con las respuestas cargadas.
+   */
+  const getSurveyResults = useCallback(
+    (surveyId: string): SurveyResultRow[] => {
+      if (dataSource === "supabase") {
+        return surveyResults
+          .filter((r) => r.surveyId === surveyId)
+          .map((r) => ({
+            optionId: r.optionId,
+            label: r.label,
+            votes: r.votes,
+            percent: r.percent,
+          }));
+      }
+      const survey = surveys.find((s) => s.id === surveyId);
+      return survey ? computeSurveyResults(survey, surveyResponses) : [];
+    },
+    [dataSource, surveyResults, surveys, surveyResponses],
+  );
+
+  /** Número de estudiantes que respondieron una encuesta. */
+  const getSurveyTotal = useCallback(
+    (surveyId: string): number => {
+      if (dataSource === "supabase") {
+        return (
+          surveyResults.find((r) => r.surveyId === surveyId)?.totalResponses ??
+          0
+        );
+      }
+      return surveyResponses.filter((r) => r.surveyId === surveyId).length;
+    },
+    [dataSource, surveyResults, surveyResponses],
+  );
 
   /* -------------------------------------------------
      Reservas
@@ -372,7 +605,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const stats = computeMealStats(meal, reservations, date);
+      const stats = getMealStats(mealId, date);
       if (availableForType(stats, student.tipo) <= 0) {
         return {
           ok: false,
@@ -383,7 +616,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const id = generateReservationCode(reservations);
+      // En Supabase el código lo asigna la base: así dos dispositivos no
+      // generan el mismo RES- a la vez.
+      let id: string;
+      try {
+        id = (await nextReservationCode()) ?? generateReservationCode(reservations);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
       const reservation: Reservation = {
         id,
         studentId: student.id,
@@ -410,12 +651,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setReservations((prev) => [...prev, reservation]);
+      void refreshMealStats();
       return {
         ok: true,
         message: `Reserva de ${meal.nombre.toLowerCase()} creada correctamente.`,
       };
     },
-    [currentStudent, meals, reservations, session, settings],
+    [
+      currentStudent,
+      getMealStats,
+      meals,
+      refreshMealStats,
+      reservations,
+      session,
+      settings,
+    ],
   );
 
   const cancelReservation = useCallback(
@@ -442,12 +692,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           r.id === reservationId ? { ...r, status: "Cancelada" } : r,
         ),
       );
+      void refreshMealStats();
       return {
         ok: true,
         message: `Reserva de ${reservation.mealName.toLowerCase()} cancelada. El cupo fue liberado.`,
       };
     },
-    [reservations],
+    [refreshMealStats, reservations],
   );
 
   const markUsed = useCallback(
@@ -480,12 +731,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : r,
         ),
       );
+      void refreshMealStats();
       return {
         ok: true,
         message: `Reserva ${reservation.id} validada correctamente.`,
       };
     },
-    [reservations],
+    [refreshMealStats, reservations],
   );
 
   const validateCode = useCallback(
@@ -497,28 +749,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* -------------------------------------------------
      Cupos y configuración
      ------------------------------------------------- */
-
-  const getMealStats = useCallback(
-    (mealId: MealId, date: string = todayISO()): MealStats => {
-      const meal = meals.find((m) => m.id === mealId);
-      if (!meal) {
-        return {
-          becariosQuota: 0,
-          libresQuota: 0,
-          totalQuota: 0,
-          resBecarios: 0,
-          resLibres: 0,
-          resTotal: 0,
-          dispBecarios: 0,
-          dispLibres: 0,
-          dispTotal: 0,
-          percentOcupado: 0,
-        };
-      }
-      return computeMealStats(meal, reservations, date);
-    },
-    [meals, reservations],
-  );
 
   const updateMeal: AppContextValue["updateMeal"] = useCallback(
     async (mealId, patch) => {
@@ -538,7 +768,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const stats = computeMealStats(meal, reservations, todayISO());
+      const stats = getMealStats(mealId, todayISO());
       if (total < stats.resTotal) {
         return {
           ok: false,
@@ -562,9 +792,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMeals((prev) =>
         prev.map((m) => (m.id === mealId ? updated : m)),
       );
+      void refreshMealStats();
       return { ok: true, message: `Cupos de ${meal.nombre.toLowerCase()} actualizados.` };
     },
-    [meals, reservations],
+    [getMealStats, meals, refreshMealStats],
   );
 
   const setReservasHabilitadas = useCallback(
@@ -604,6 +835,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (students.some((s) => s.correo.toLowerCase() === correo)) {
         return { ok: false, message: "Ya existe un estudiante con ese correo." };
       }
+      if (dataSource === "supabase" && password.length < 6) {
+        return {
+          ok: false,
+          message: "La contraseña de acceso debe tener al menos 6 caracteres.",
+        };
+      }
 
       const nextNumber = students.reduce((acc, s) => {
         const n = Number(s.id.replace(/\D/g, ""));
@@ -626,9 +863,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setStudents((prev) => [...prev, newStudent]);
+
+      // En Supabase se crea también la cuenta de acceso (Supabase Auth,
+      // contraseña con hash) para que el estudiante pueda iniciar sesión.
+      if (dataSource === "supabase") {
+        try {
+          await createAuthUser(correo, password);
+        } catch (err) {
+          return {
+            ok: true,
+            message: `${nombre} fue agregado, pero no se pudo crear su cuenta de acceso (${errorMessage(err)}).`,
+          };
+        }
+        return {
+          ok: true,
+          message: `${nombre} fue agregado y ya puede iniciar sesión con su correo.`,
+        };
+      }
+
       return { ok: true, message: `${nombre} fue agregado correctamente.` };
     },
-    [students],
+    [dataSource, students],
   );
 
   const toggleStudentStatus = useCallback(
@@ -706,12 +961,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setSurveys((prev) => [saved, ...prev]);
+      void refreshSurveyResults();
       return {
         ok: true,
         message: `Encuesta «${title}» creada y abierta para votar.`,
       };
     },
-    [surveys],
+    [refreshSurveyResults, surveys],
   );
 
   const toggleSurvey = useCallback(
@@ -751,9 +1007,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setSurveys((prev) => prev.filter((s) => s.id !== surveyId));
       setSurveyResponses((prev) => prev.filter((r) => r.surveyId !== surveyId));
+      void refreshSurveyResults();
       return { ok: true, message: `Encuesta «${survey.title}» eliminada.` };
     },
-    [surveys],
+    [refreshSurveyResults, surveys],
   );
 
   const submitSurveyResponse = useCallback(
@@ -789,13 +1046,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (existing) {
         response = { ...existing, optionIds: valid, updatedAt: now };
       } else {
-        const nextNumber = surveyResponses.reduce((acc, r) => {
-          const n = Number(r.id.replace(/\D/g, ""));
-          return Number.isFinite(n) && n > acc ? n : acc;
-        }, 0);
+        // En Supabase el código lo asigna la base: al no verse las
+        // respuestas ajenas, un correlativo local colisionaría.
+        let id: string;
+        if (dataSource === "supabase") {
+          try {
+            id = (await nextResponseCode()) ?? "";
+          } catch (err) {
+            return { ok: false, message: saveError(err) };
+          }
+          if (!id) {
+            return {
+              ok: false,
+              message: "No se pudo generar el código de tu respuesta.",
+            };
+          }
+        } else {
+          const nextNumber = surveyResponses.reduce((acc, r) => {
+            const n = Number(r.id.replace(/\D/g, ""));
+            return Number.isFinite(n) && n > acc ? n : acc;
+          }, 0);
+          id = `RESP-${String(nextNumber + 1).padStart(3, "0")}`;
+        }
 
         response = {
-          id: `RESP-${String(nextNumber + 1).padStart(3, "0")}`,
+          id,
           surveyId,
           studentId: student.id,
           studentName: student.nombre,
@@ -816,12 +1091,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? prev.map((r) => (r.id === existing.id ? response : r))
           : [...prev, response],
       );
+      void refreshSurveyResults();
 
       return existing
         ? { ok: true, message: "Tu respuesta fue actualizada." }
         : { ok: true, message: "¡Gracias! Tu voto quedó registrado." };
     },
-    [currentStudent, session, surveyResponses, surveys],
+    [
+      currentStudent,
+      dataSource,
+      refreshSurveyResults,
+      session,
+      surveyResponses,
+      surveys,
+    ],
   );
 
   /* -------------------------------------------------
@@ -862,6 +1145,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       markUsed,
       validateCode,
       getMealStats,
+      getSurveyResults,
+      getSurveyTotal,
       updateMeal,
       setReservasHabilitadas,
       addStudent,
@@ -891,6 +1176,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       markUsed,
       validateCode,
       getMealStats,
+      getSurveyResults,
+      getSurveyTotal,
       updateMeal,
       setReservasHabilitadas,
       addStudent,

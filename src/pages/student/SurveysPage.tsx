@@ -7,15 +7,18 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurveyResultsBars } from "@/components/survey/SurveyResultsBars";
-import {
-  countSurveyResponses,
-  findMySurveyResponse,
-} from "@/utils/surveyUtils";
+import { findMySurveyResponse } from "@/utils/surveyUtils";
 import { formatShort } from "@/utils/dates";
 
 export function SurveysPage() {
-  const { surveys, surveyResponses, currentStudent, submitSurveyResponse } =
-    useApp();
+  const {
+    surveys,
+    surveyResponses,
+    currentStudent,
+    submitSurveyResponse,
+    getSurveyResults,
+    getSurveyTotal,
+  } = useApp();
   const { push } = useToast();
 
   // Selección en curso por encuesta (si no se tocó, se usa la respuesta guardada).
@@ -77,7 +80,7 @@ export function SurveysPage() {
               currentStudent?.id,
             );
             const selected = selections[survey.id] ?? myResponse?.optionIds ?? [];
-            const total = countSurveyResponses(surveyResponses, survey.id);
+            const total = getSurveyTotal(survey.id);
             const showResults = Boolean(myResponse) || !survey.active;
 
             return (
@@ -174,8 +177,8 @@ export function SurveysPage() {
 
                   {showResults ? (
                     <SurveyResultsBars
-                      survey={survey}
-                      responses={surveyResponses}
+                      results={getSurveyResults(survey.id)}
+                      total={getSurveyTotal(survey.id)}
                     />
                   ) : (
                     <p className="rounded-lg bg-surface/70 px-3.5 py-3 text-sm text-muted">

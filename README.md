@@ -50,21 +50,29 @@ npm run dev
 
 Cómo se reparte el trabajo (ver `supabase/README.md` para el script SQL):
 
+- **Sesión**: el login se valida con **Supabase Auth** (correo y contraseña con
+  hash bcrypt). Al iniciar sesión, la app carga los datos que las políticas RLS
+  permiten ver a ese usuario; al cerrar, se limpian.
 - **Lecturas**: `AppContext` paga una única carga inicial desde las vistas
   `vw_students`, `vw_app_users`, `vw_meals`, `vw_settings`, `vw_reservations`,
   `vw_surveys` y `vw_survey_responses`, que devuelven exactamente los mismos
-  nombres de campo que los tipos de TypeScript.
+  nombres de campo que los tipos de TypeScript. Los **cupos** (`vw_meal_stats`)
+  y los **resultados de encuestas** (`vw_survey_results`) llegan ya agregados
+  desde el servidor, así que siguen siendo correctos aunque RLS oculte las
+  filas individuales.
 - **Escrituras**: cada acción (reservar, cancelar, validar, editar cupos,
   crear/eliminar encuestas, votar…) escribe en la tabla base correspondiente
-  y solo actualiza la pantalla si la base confirmó la operación.
+  y solo actualiza la pantalla si la base confirmó la operación. Los códigos
+  `RES-` y `RESP-` los asigna la base (sin colisiones entre dispositivos).
 - **Respaldo local**: mientras tanto, `localStorage` guarda una copia de los
   datos; si Supabase no responde, la app avisa con un toast y sigue operativa
   en modo local.
 - Si `.env` no tiene clave, todo funciona en modo local (sin peticiones de red).
 
-> ⚠ La clave `anon` es pública (va embebida en la web) y las políticas RLS del
-> script están abiertas **solo para esta demostración**. Para producción se
-> recomienda Supabase Auth y políticas por usuario.
+> La clave `anon` es pública (va embebida en la web), pero **sin sesión el rol
+> `anon` no accede a nada**: las 9 tablas tienen RLS por usuario (cada
+> estudiante ve lo suyo, el administrador ve todo) y las contraseñas solo
+> existen cifradas con bcrypt en `auth.users`. Ver `supabase/README.md` §6.
 
 ## Sitio publicado (GitHub Pages)
 

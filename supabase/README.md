@@ -20,6 +20,18 @@ Este script crea **desde cero** toda la base de datos del proyecto en
 3. Pulsa **Run** (o `Ctrl + Enter`).
 4. Al terminar verás la tabla de conteos de la sección 11.
 
+> **Base ya existente (proyecto «COMEDOR UNJFSC»)**: no hace falta recrearla.
+> Ejecuta en su lugar `supabase/migration-v2-seguridad.sql`, que deja la base
+> igual que este archivo: crea las cuentas en Supabase Auth, elimina las
+> contraseñas en texto plano y aplica las políticas RLS por usuario.
+> El script es idempotente: puedes ejecutarlo más de una vez.
+
+### Ajuste recomendado de Supabase Auth
+
+En **Authentication → Settings → Providers → Email**, desactiva
+**Allow new users to sign up**. Así solo existen las cuentas que tú creas
+(las demo y las que agregue el administrador) y nadie se registra por su cuenta.
+
 ## 3. Comprobar que quedó bien
 
 - **Table Editor**: deben aparecer 9 tablas (`students`, `app_users`, `meals`,
@@ -67,16 +79,29 @@ También sirve el correo institucional de cualquiera de los 12 estudiantes
 - Códigos visibles generados por secuencia: `RES-00040`, `ENC-003`, `RESP-017`.
 - `updated_at` automático mediante triggers.
 
-## 6. Seguridad (importante)
+## 6. Seguridad (Supabase Auth + RLS por usuario)
 
-- **RLS está activado** en las 9 tablas con la política `demo_acceso_total`
-  (lectura y escritura para el rol `anon`), porque el login de la app es
-  **simulado** y no usa Supabase Auth.
-- ⚠️ Esto es válido **solo para la demostración**: cualquiera con la *anon key*
-  podría modificar los datos. Para producción hay que pasar a Supabase Auth y
-  sustituir esas políticas por políticas por usuario.
-- Las contraseñas se guardan en texto plano (el login lo compara en el
-  cliente); igual que hoy en `localStorage`. No usar con datos reales.
+- **Login real con Supabase Auth**: el correo y la contraseña se validan en el
+  servidor con **hash bcrypt**. En la base solo queda `encrypted_password`;
+  las columnas `password` de `students` y `app_users` **no existen**.
+- Las 20 cuentas (8 de demostración + los 12 correos institucionales) se crean
+  en `auth.users` dentro del propio script.
+- **RLS está activado en las 9 tablas** con políticas por usuario:
+
+  | Rol | Qué ve y qué puede hacer |
+  | --- | --- |
+  | `anon` (sin sesión) | **No accede a nada.** |
+  | `authenticated` estudiante | Sus fichas, sus reservas, sus votos. Puede cancelar su reserva y votar. |
+  | `authenticated` administrador | Todo: estudiantes, reservas, cupos, encuestas. |
+
+- Los **cupos** y los **resultados de encuestas** se sirven desde
+  `vw_meal_stats` y `vw_survey_results`, vistas que ejecutan como propietario
+  y solo devuelven conteos (sin nombres ni quién votó qué).
+- Las funciones `is_admin()`, `my_student_id()` y `create_demo_user()` son
+  `SECURITY DEFINER`; `create_demo_user` solo puede llamarlo un administrador
+  y es la que crea cuentas de acceso al agregar un estudiante.
+- El **módulo de kiosco** está reservado al rol `admin` (es una terminal de
+  validación del comedor).
 
 ## 7. Conectar la aplicación
 

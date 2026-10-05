@@ -3,26 +3,34 @@
  *
  * Dos modos de trabajo, decididos por la presencia de credenciales en .env:
  *
- *  - "supabase": lectura desde las vistas vw_* (mismos nombres que los
- *    tipos de TypeScript) y escritura sobre las tablas base.
+ *  - "supabase": sesión real con SUPABASE AUTH (correo + contraseña con
+ *    hash bcrypt), lectura desde las vistas vw_* y escritura sobre las
+ *    tablas base. Las políticas RLS limitan cada consulta a lo que el rol
+ *    autenticado puede ver: un estudiante solo ve sus filas y el admin, todo.
  *  - "local":    se conserva el comportamiento original de la demostración
  *                con localStorage; ninguna función de escritura hace nada.
  *
  * El resto de la app (páginas y lógica de negocio) solo habla con estas
  * funciones, así que el cambio de almacenamiento no se filtra hacia fuera.
+ *
+ * Nota: los cupos y los resultados de encuestas se leen de las vistas de
+ * agregados (vw_meal_stats / vw_survey_results), que solo devuelven conteos
+ * y se calculan en el servidor: así RLS puede ocultar las filas individuales
+ * sin perder los totales.
  */
 
 import { isSupabaseEnabled, supabase } from "@/lib/supabase";
 import type {
   DemoAccount,
   Meal,
+  MealId,
   Reservation,
   ReservationStatus,
+  Session,
   Settings,
   Student,
   Survey,
   SurveyResponse,
-  UserRole,
 } from "@/types";
 import {
   createSeedReservations,
@@ -47,6 +55,35 @@ export interface AppData {
   reservations: Reservation[];
   surveys: Survey[];
   surveyResponses: SurveyResponse[];
+  /** Cupos por servicio y fecha (vista de agregados del servidor). */
+  mealStats: MealStat[];
+  /** Votos por opción (vista de agregados del servidor). */
+  surveyResults: SurveyResultsRow[];
+}
+
+/** Fila de vw_meal_stats: cupos y reservas de un servicio en una fecha. */
+export interface MealStat {
+  mealId: MealId;
+  fecha: string;
+  total: number;
+  becarios: number;
+  resBecarios: number;
+  resLibres: number;
+  resTotal: number;
+  dispBecarios: number;
+  dispLibres: number;
+  dispTotal: number;
+  percentOcupado: number;
+}
+
+/** Fila de vw_survey_results: votos de una opción y totales de su encuesta. */
+export interface SurveyResultsRow {
+  surveyId: string;
+  optionId: string;
+  label: string;
+  votes: number;
+  percent: number;
+  totalResponses: number;
 }
 
 /* ---------------------------------------------------------
@@ -114,12 +151,11 @@ interface StudentRow {
   correo: string;
   tipo: string;
   activo: boolean;
-  password: string | null;
 }
 
+/** Cuenta de acceso de vw_app_users (sin contraseña: la valida Auth). */
 interface AccountRow {
   email: string;
-  password: string;
   role: string;
   nombre: string;
   studentId: string | null;
@@ -175,16 +211,6 @@ const toStudent = (r: StudentRow): Student => ({
   correo: r.correo,
   tipo: r.tipo as Student["tipo"],
   activo: Boolean(r.activo),
-  password: r.password ?? undefined,
-});
-
-const toAccount = (r: AccountRow): DemoAccount => ({
-  email: r.email,
-  password: r.password,
-  role: r.role as UserRole,
-  nombre: r.nombre,
-  studentId: r.studentId ?? undefined,
-  tipo: (r.tipo as Student["tipo"] | null) ?? undefined,
 });
 
 const toReservation = (r: ReservationRow): Reservation => ({
@@ -249,11 +275,18 @@ function localAppData(): AppData {
       STORAGE_KEYS.surveyResponses,
       createSeedSurveyResponses(),
     ),
+    // En modo local los agregados se calculan en memoria (JS).
+    mealStats: [],
+    surveyResults: [],
   };
 }
 
 /**
  * Carga todos los datos de una vez.
+ *
+ * En modo Supabase exige tener sesión iniciada: RLS devuelve permisos
+ * denegados a quien no la tiene, así que el contexto solo llama a esta
+ * función después del login (o si ya había una sesión guardada).
  * Lanza un error si Supabase no responde (el contexto decide qué hacer).
  */
 export async function loadAppData(): Promise<{
@@ -266,20 +299,17 @@ export async function loadAppData(): Promise<{
 
   const [
     students,
-    accounts,
     meals,
     settings,
     reservations,
     surveys,
     responses,
+    mealStats,
+    surveyResults,
   ] = await Promise.all([
     run<StudentRow[]>(
       supabase.from("vw_students").select("*"),
       "leer estudiantes",
-    ),
-    run<AccountRow[]>(
-      supabase.from("vw_app_users").select("*"),
-      "leer cuentas de acceso",
     ),
     run<Meal[]>(supabase.from("vw_meals").select("*"), "leer servicios"),
     run<SettingsRow[]>(
@@ -295,13 +325,17 @@ export async function loadAppData(): Promise<{
       supabase.from("vw_survey_responses").select("*"),
       "leer respuestas",
     ),
+    loadMealStats(),
+    loadSurveyResults(),
   ]);
 
   return {
     source: "supabase",
     data: {
       students: students.map(toStudent),
-      accounts: accounts.map(toAccount),
+      // Las cuentas de demostración son estáticas: las contraseñas ya no
+      // se guardan en la base, las valida Supabase Auth.
+      accounts: demoAccounts,
       meals: meals.map((m) => ({ ...m })),
       settings: settings[0]
         ? { reservasHabilitadas: Boolean(settings[0].reservasHabilitadas) }
@@ -309,8 +343,175 @@ export async function loadAppData(): Promise<{
       reservations: reservations.map(toReservation),
       surveys: surveys.map(toSurvey),
       surveyResponses: responses.map(toSurveyResponse),
+      mealStats,
+      surveyResults,
     },
   };
+}
+
+/** Cupos por servicio y fecha (lectura puntual, tras cada movimiento). */
+export async function loadMealStats(): Promise<MealStat[]> {
+  if (!supabase) return [];
+  return run<MealStat[]>(
+    supabase.from("vw_meal_stats").select("*"),
+    "leer los cupos",
+  );
+}
+
+/** Votos por opción de cada encuesta (lectura puntual, tras votar). */
+export async function loadSurveyResults(): Promise<SurveyResultsRow[]> {
+  if (!supabase) return [];
+  return run<SurveyResultsRow[]>(
+    supabase.from("vw_survey_results").select("*"),
+    "leer los resultados",
+  );
+}
+
+/* ---------------------------------------------------------
+   Supabase Auth: sesión real (correo + contraseña con hash)
+   --------------------------------------------------------- */
+
+/** Correo del usuario con sesión iniciada (null si no hay sesión). */
+export async function currentAuthEmail(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  const email = data.session?.user?.email ?? "";
+  return email ? email.trim().toLowerCase() : null;
+}
+
+/**
+ * Inicia sesión en Supabase Auth.
+ * Devuelve null si todo fue bien o, si no, un mensaje en español.
+ */
+export async function signIn(
+  email: string,
+  password: string,
+): Promise<string | null> {
+  if (!supabase) return "faltan las credenciales de Supabase en el archivo .env.";
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+  if (!error) return null;
+
+  const raw = error.message ?? "";
+  if (/invalid login credentials/i.test(raw)) {
+    return "el correo o la contraseña no son correctos.";
+  }
+  if (/email not confirmed/i.test(raw)) {
+    return "el correo todavía no está confirmado en Supabase Auth.";
+  }
+  if (/rate limit|too many request|only request this after/i.test(raw)) {
+    return "demasiados intentos: espera un minuto y vuelve a probar.";
+  }
+  if (/fetch|network/i.test(raw)) {
+    return "no hay conexión con Supabase (revisa internet o las credenciales de .env).";
+  }
+  return raw.toLowerCase();
+}
+
+/** Cierra la sesión de Supabase Auth (si la hay). */
+export async function signOut(): Promise<void> {
+  if (!supabase) return;
+  await supabase.auth.signOut();
+}
+
+/**
+ * Construye la sesión de la aplicación a partir del correo autenticado.
+ * · Cuenta de app_users  -> su rol y, si es estudiante, su ficha.
+ * · Correo institucional -> se busca directamente en students.
+ * Devuelve null si la cuenta no existe o el estudiante está inactivo.
+ */
+export async function sessionFromEmail(
+  email: string,
+): Promise<Session | null> {
+  if (!supabase) return null;
+  const mail = email.trim().toLowerCase();
+
+  const cuentas = await run<AccountRow[]>(
+    supabase.from("vw_app_users").select("*").eq("email", mail),
+    "leer tu cuenta de acceso",
+  );
+  const acc = cuentas[0];
+
+  if (acc) {
+    if (acc.role === "estudiante") {
+      const fichas = await run<StudentRow[]>(
+        supabase.from("vw_students").select("*").eq("id", acc.studentId ?? ""),
+        "leer tu ficha de estudiante",
+      );
+      const ficha = fichas[0] ? toStudent(fichas[0]) : null;
+      if (!ficha || !ficha.activo) return null;
+      return {
+        role: "estudiante",
+        email: acc.email,
+        nombre: ficha.nombre,
+        studentId: ficha.id,
+        tipo: ficha.tipo,
+      };
+    }
+    return { role: "admin", email: acc.email, nombre: acc.nombre };
+  }
+
+  // Correo institucional (no está en app_users): se lee de students.
+  const filas = await run<StudentRow[]>(
+    supabase.from("vw_students").select("*").eq("correo", mail),
+    "leer tu ficha de estudiante",
+  );
+  const ficha = filas[0] ? toStudent(filas[0]) : null;
+  if (!ficha || !ficha.activo) return null;
+  return {
+    role: "estudiante",
+    email: ficha.correo,
+    nombre: ficha.nombre,
+    studentId: ficha.id,
+    tipo: ficha.tipo,
+  };
+}
+
+/**
+ * Siguiente código de reserva (RES-00045). Lo asigna la base de datos
+ * porque en modo Supabase cada estudiante solo ve las suyas y no podría
+ * calcular el correlativo sin colisionar con los demás.
+ * Devuelve null en modo local (allí se calcula en memoria).
+ */
+export async function nextReservationCode(): Promise<string | null> {
+  if (!supabase) return null;
+  const id = await run<string>(
+    supabase.rpc("next_reservation_id"),
+    "generar el código de reserva",
+  );
+  return typeof id === "string" && id ? id : null;
+}
+
+/** Siguiente código de respuesta (RESP-017). Mismo motivo que arriba. */
+export async function nextResponseCode(): Promise<string | null> {
+  if (!supabase) return null;
+  const id = await run<string>(
+    supabase.rpc("next_response_id"),
+    "generar el código de respuesta",
+  );
+  return typeof id === "string" && id ? id : null;
+}
+
+/**
+ * Crea la cuenta de acceso de un estudiante en Supabase Auth (hash bcrypt).
+ * Solo puede llamarla un administrador; lanza un error en español si falla.
+ */
+export async function createAuthUser(
+  email: string,
+  password: string,
+): Promise<void> {
+  if (!supabase) return;
+  await exec(
+    supabase.rpc("create_demo_user", {
+      p_email: email,
+      p_password: password,
+    }),
+    "crear la cuenta de acceso",
+  );
 }
 
 /* ---------------------------------------------------------
@@ -381,6 +582,7 @@ export async function updateSettingsRow(
 
 export async function insertStudentRow(s: Student): Promise<void> {
   if (!supabase) return;
+  // Sin contraseña: el acceso lo gestiona Supabase Auth (create_demo_user).
   await exec(
     supabase.from("students").insert({
       id: s.id,
@@ -388,7 +590,6 @@ export async function insertStudentRow(s: Student): Promise<void> {
       correo: s.correo,
       tipo: s.tipo,
       activo: s.activo,
-      password: s.password ?? "123456",
     }),
     "guardar el estudiante",
   );

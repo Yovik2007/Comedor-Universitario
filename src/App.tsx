@@ -113,8 +113,8 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      {/* Kiosco (accesible con cualquier sesión) */}
-      <Route element={<RequireAuth />}>
+      {/* Kiosco (terminal de validación: solo administradores) */}
+      <Route element={<RequireAuth role="admin" />}>
         <Route path="/kiosco" element={<KioskPage />} />
       </Route>
 

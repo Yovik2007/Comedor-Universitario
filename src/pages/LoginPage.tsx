@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Eye,
   EyeOff,
@@ -70,7 +70,7 @@ export function LoginPage() {
 
     setLoading(true);
     await sleep(350);
-    const result = login(email, password);
+    const result = await login(email, password);
     setLoading(false);
 
     if (!result.ok) {
@@ -233,13 +233,8 @@ export function LoginPage() {
             </button>
 
             <p className="text-center text-xs text-muted">
-              Los datos de esta demostración son simulados.{" "}
-              <Link
-                to="/kiosco"
-                className="font-semibold text-secondary hover:underline"
-              >
-                Ir al kiosco
-              </Link>
+              Los datos de esta demostración son simulados. El módulo de
+              kiosco se abre desde el panel administrativo.
             </p>
           </div>
 
