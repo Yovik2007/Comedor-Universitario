@@ -56,7 +56,7 @@ export function SurveyManagementPage() {
     setForm((f) => ({ ...f, options: f.options.filter((_, i) => i !== index) }));
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const options = form.options.map((o) => o.trim());
 
     if (!form.title.trim() || !form.question.trim()) {
@@ -68,7 +68,7 @@ export function SurveyManagementPage() {
       return;
     }
 
-    const result = createSurvey({
+    const result = await createSurvey({
       title: form.title,
       question: form.question,
       options,
@@ -82,21 +82,20 @@ export function SurveyManagementPage() {
     }
   };
 
-  const handleToggle = (survey: Survey) => {
-    toggleSurvey(survey.id);
-    push(
-      "info",
-      survey.active
-        ? `«${survey.title}» se cerró: ya no se aceptan votos.`
-        : `«${survey.title}» se abrió para votar.`,
-    );
+  const handleToggle = async (survey: Survey) => {
+    const result = await toggleSurvey(survey.id);
+    push(result.ok ? "info" : "error", result.message);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!toDelete) return;
-    deleteSurvey(toDelete.id);
-    push("success", `Encuesta «${toDelete.title}» eliminada.`);
-    setToDelete(null);
+    const result = await deleteSurvey(toDelete.id);
+    if (result.ok) {
+      push("success", result.message);
+      setToDelete(null);
+    } else {
+      push("error", result.message);
+    }
   };
 
   return (

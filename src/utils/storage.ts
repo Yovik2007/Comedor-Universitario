@@ -1,6 +1,8 @@
 /**
  * Acceso a localStorage con manejo de errores.
- * Es la única "base de datos" del proyecto: datos simulados y locales.
+ * Es la copia de respaldo local de los datos (la fuente de verdad es
+ * Supabase cuando está configurado en .env; sin credenciales, este
+ * almacenamiento es el único, como en la demostración original).
  */
 
 export const STORAGE_KEYS = {

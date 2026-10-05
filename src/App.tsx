@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, Outlet } from "react-router-dom
 import { AppProvider, useApp } from "@/context/AppContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { Toaster } from "@/components/ui/Toaster";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { StudentLayout } from "@/components/layout/StudentLayout";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 
@@ -67,43 +68,57 @@ export default function App() {
       <AppProvider>
         <BrowserRouter basename={routerBasename}>
           <Toaster />
-          <Routes>
-            <Route path="/" element={<HomeRedirect />} />
-            <Route path="/login" element={<LoginRoute />} />
-
-            {/* Módulo estudiante */}
-            <Route element={<RequireAuth role="estudiante" />}>
-              <Route path="/student" element={<StudentLayout />}>
-                <Route index element={<HomePage />} />
-                <Route path="reservar" element={<ReservePage />} />
-                <Route path="reservas" element={<MyReservationsPage />} />
-                <Route path="encuestas" element={<SurveysPage />} />
-                <Route path="informacion" element={<InfoPage />} />
-              </Route>
-            </Route>
-
-            {/* Módulo administrador */}
-            <Route element={<RequireAuth role="admin" />}>
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<DashboardPage />} />
-                <Route path="reservas" element={<ReservationsPage />} />
-                <Route path="cupos" element={<CupsPage />} />
-                <Route path="estudiantes" element={<StudentsPage />} />
-                <Route path="encuestas" element={<SurveyManagementPage />} />
-                <Route path="validacion" element={<ValidationPage />} />
-                <Route path="configuracion" element={<SettingsPage />} />
-              </Route>
-            </Route>
-
-            {/* Kiosco (accesible con cualquier sesión) */}
-            <Route element={<RequireAuth />}>
-              <Route path="/kiosco" element={<KioskPage />} />
-            </Route>
-
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+          <AppRoutes />
         </BrowserRouter>
       </AppProvider>
     </ToastProvider>
+  );
+}
+
+/**
+ * Router de la aplicación. Espera a que el contexto termine de cargar
+ * (Supabase o localStorage) para no mostrar datos a medias.
+ */
+function AppRoutes() {
+  const { loading } = useApp();
+
+  if (loading) return <LoadingScreen />;
+
+  return (
+    <Routes>
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="/login" element={<LoginRoute />} />
+
+      {/* Módulo estudiante */}
+      <Route element={<RequireAuth role="estudiante" />}>
+        <Route path="/student" element={<StudentLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="reservar" element={<ReservePage />} />
+          <Route path="reservas" element={<MyReservationsPage />} />
+          <Route path="encuestas" element={<SurveysPage />} />
+          <Route path="informacion" element={<InfoPage />} />
+        </Route>
+      </Route>
+
+      {/* Módulo administrador */}
+      <Route element={<RequireAuth role="admin" />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="reservas" element={<ReservationsPage />} />
+          <Route path="cupos" element={<CupsPage />} />
+          <Route path="estudiantes" element={<StudentsPage />} />
+          <Route path="encuestas" element={<SurveyManagementPage />} />
+          <Route path="validacion" element={<ValidationPage />} />
+          <Route path="configuracion" element={<SettingsPage />} />
+        </Route>
+      </Route>
+
+      {/* Kiosco (accesible con cualquier sesión) */}
+      <Route element={<RequireAuth />}>
+        <Route path="/kiosco" element={<KioskPage />} />
+      </Route>
+
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   );
 }

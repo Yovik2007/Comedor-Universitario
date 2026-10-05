@@ -44,9 +44,9 @@ export function CupsPage() {
     setFormError("");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editing) return;
-    const result = updateMeal(editing.id, form);
+    const result = await updateMeal(editing.id, form);
     if (result.ok) {
       push("success", result.message);
       setEditing(null);
@@ -55,14 +55,9 @@ export function CupsPage() {
     }
   };
 
-  const handleToggleGlobal = (enabled: boolean) => {
-    setReservasHabilitadas(enabled);
-    push(
-      enabled ? "success" : "info",
-      enabled
-        ? "Reservas habilitadas para todos los estudiantes."
-        : "Reservas inhabilitadas temporalmente.",
-    );
+  const handleToggleGlobal = async (enabled: boolean) => {
+    const result = await setReservasHabilitadas(enabled);
+    push(result.ok ? (enabled ? "success" : "info") : "error", result.message);
   };
 
   return (

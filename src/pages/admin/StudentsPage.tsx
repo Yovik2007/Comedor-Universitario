@@ -65,14 +65,14 @@ export function StudentsPage() {
     setAddOpen(true);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const input: NewStudentInput = {
       nombre: form.nombre,
       correo: form.correo,
       tipo: form.tipo,
       password: form.password,
     };
-    const result = addStudent(input);
+    const result = await addStudent(input);
     if (result.ok) {
       push("success", result.message);
       setAddOpen(false);
@@ -81,19 +81,17 @@ export function StudentsPage() {
     }
   };
 
-  const handleToggle = (student: Student) => {
-    toggleStudentStatus(student.id);
-    push(
-      "info",
-      student.activo
-        ? `${student.nombre} fue desactivado.`
-        : `${student.nombre} fue reactivado.`,
-    );
-    setDetail((prev) =>
-      prev && prev.id === student.id
-        ? { ...prev, activo: !prev.activo }
-        : prev,
-    );
+  const handleToggle = async (student: Student) => {
+    const result = await toggleStudentStatus(student.id);
+    push(result.ok ? "info" : "error", result.message);
+
+    if (result.ok) {
+      setDetail((prev) =>
+        prev && prev.id === student.id
+          ? { ...prev, activo: !prev.activo }
+          : prev,
+      );
+    }
   };
 
   const detailReservations = detail

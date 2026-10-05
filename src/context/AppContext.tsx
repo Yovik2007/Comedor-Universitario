@@ -1,7 +1,11 @@
 /**
  * Fuente única de verdad de la aplicación.
- * Gestiona sesión, estudiantes, reservas, cupos y configuración,
- * persistiéndolo todo en localStorage (sin backend ni servicios externos).
+ * Gestiona sesión, estudiantes, reservas, cupos, encuestas y configuración.
+ *
+ * Los datos viven en Supabase (proyecto «COMEDOR UNJFSC») cuando existe
+ * la configuración en .env; mientras llegan, la app muestra una pantalla
+ * de carga. Si no hay credenciales, se conserva el modo local original
+ * con localStorage (la demostración sigue funcionando sin internet).
  */
 
 import {
@@ -14,6 +18,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type {
+  DemoAccount,
   Meal,
   MealId,
   Reservation,
@@ -45,6 +50,23 @@ import {
   validateReservationCode,
 } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
+import { isSupabaseEnabled } from "@/lib/supabase";
+import {
+  deleteSurveyRow,
+  errorMessage,
+  insertReservation,
+  insertStudentRow,
+  insertSurveyRow,
+  loadAppData,
+  saveResponseRow,
+  setSurveyActiveRow,
+  updateMealRow,
+  updateReservationRow,
+  updateSettingsRow,
+  updateStudentRow,
+} from "@/services/api";
+import type { DataSource } from "@/services/api";
+import { useToast } from "@/context/ToastContext";
 
 export interface LoginResult {
   ok: boolean;
@@ -75,39 +97,51 @@ interface AppContextValue {
   settings: Settings;
   surveys: Survey[];
   surveyResponses: SurveyResponse[];
+  /** Cuentas de acceso (app_users en Supabase; demo en modo local). */
+  accounts: DemoAccount[];
+  /** true mientras se cargan los datos de la base de datos. */
+  loading: boolean;
+  /** Dónde están guardados los datos: "supabase" o "local". */
+  dataSource: DataSource;
 
   login: (email: string, password: string) => LoginResult;
   logout: () => void;
 
-  reserve: (mealId: MealId) => ReserveResult;
-  cancelReservation: (reservationId: string) => ReserveResult;
-  markUsed: (reservationId: string) => ReserveResult;
+  reserve: (mealId: MealId) => Promise<ReserveResult>;
+  cancelReservation: (reservationId: string) => Promise<ReserveResult>;
+  markUsed: (reservationId: string) => Promise<ReserveResult>;
   validateCode: (code: string) => ValidationOutcome;
 
   getMealStats: (mealId: MealId, date?: string) => MealStats;
   updateMeal: (
     mealId: MealId,
     patch: Partial<Pick<Meal, "total" | "becarios" | "horario" | "habilitado">>,
-  ) => ReserveResult;
-  setReservasHabilitadas: (enabled: boolean) => void;
+  ) => Promise<ReserveResult>;
+  setReservasHabilitadas: (enabled: boolean) => Promise<ReserveResult>;
 
-  addStudent: (input: NewStudentInput) => ReserveResult;
-  toggleStudentStatus: (studentId: string) => void;
+  addStudent: (input: NewStudentInput) => Promise<ReserveResult>;
+  toggleStudentStatus: (studentId: string) => Promise<ReserveResult>;
 
-  createSurvey: (input: NewSurveyInput) => ReserveResult;
-  toggleSurvey: (surveyId: string) => void;
-  deleteSurvey: (surveyId: string) => void;
+  createSurvey: (input: NewSurveyInput) => Promise<ReserveResult>;
+  toggleSurvey: (surveyId: string) => Promise<ReserveResult>;
+  deleteSurvey: (surveyId: string) => Promise<ReserveResult>;
   submitSurveyResponse: (
     surveyId: string,
     optionIds: string[],
-  ) => ReserveResult;
+  ) => Promise<ReserveResult>;
 
   resetDemoData: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+/** Mensaje de error compartido para todas las operaciones de guardado. */
+const saveError = (err: unknown): string =>
+  `No se pudo guardar en la base de datos: ${errorMessage(err)}`;
+
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { push } = useToast();
+
   const [students, setStudents] = useState<Student[]>(() =>
     loadJSON(STORAGE_KEYS.students, initialStudents),
   );
@@ -126,6 +160,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>(
     () => loadJSON(STORAGE_KEYS.surveyResponses, createSeedSurveyResponses()),
   );
+  const [accounts, setAccounts] = useState<DemoAccount[]>(demoAccounts);
+  const [loading, setLoading] = useState(isSupabaseEnabled);
+  const [dataSource, setDataSource] = useState<DataSource>(
+    isSupabaseEnabled ? "supabase" : "local",
+  );
 
   // Las reservas de muestra se regeneran si cambió el día desde la última visita.
   const [reservations, setReservations] = useState<Reservation[]>(() => {
@@ -140,7 +179,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   /* -------------------------------------------------
-     Persistencia
+     Carga inicial desde Supabase
+     ------------------------------------------------- */
+
+  useEffect(() => {
+    if (!isSupabaseEnabled) return;
+    let alive = true;
+
+    void (async () => {
+      try {
+        const { data, source } = await loadAppData();
+        if (!alive) return;
+        setStudents(data.students);
+        setAccounts(data.accounts);
+        setMeals(data.meals);
+        setSettings(data.settings);
+        setReservations(data.reservations);
+        setSurveys(data.surveys);
+        setSurveyResponses(data.surveyResponses);
+        setDataSource(source);
+      } catch (err) {
+        if (!alive) return;
+        setDataSource("local");
+        push("error", `No se pudo cargar Supabase: ${errorMessage(err)}`);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [push]);
+
+  /* -------------------------------------------------
+     Persistencia local (copia de respaldo en el navegador)
      ------------------------------------------------- */
 
   useEffect(() => {
@@ -186,9 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: "Completa todos los campos." };
       }
 
-      const demo = demoAccounts.find(
-        (a) => a.email.toLowerCase() === mail,
-      );
+      const demo = accounts.find((a) => a.email.toLowerCase() === mail);
 
       if (demo) {
         if (demo.password !== pass) {
@@ -245,7 +316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return { ok: true, role: "estudiante" };
     },
-    [students],
+    [accounts, students],
   );
 
   const logout = useCallback(() => setSession(null), []);
@@ -260,7 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      ------------------------------------------------- */
 
   const reserve = useCallback(
-    (mealId: MealId): ReserveResult => {
+    async (mealId: MealId): Promise<ReserveResult> => {
       if (!session) {
         return { ok: false, message: "Debes iniciar sesión para reservar." };
       }
@@ -332,6 +403,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createdAt: nowISO(),
       };
 
+      try {
+        await insertReservation(reservation);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
       setReservations((prev) => [...prev, reservation]);
       return {
         ok: true,
@@ -342,7 +419,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const cancelReservation = useCallback(
-    (reservationId: string): ReserveResult => {
+    async (reservationId: string): Promise<ReserveResult> => {
       const reservation = reservations.find((r) => r.id === reservationId);
       if (!reservation) {
         return { ok: false, message: "Reserva no encontrada." };
@@ -352,6 +429,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ok: false,
           message: "Solo se pueden cancelar reservas activas.",
         };
+      }
+
+      try {
+        await updateReservationRow(reservationId, { status: "Cancelada" });
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
       }
 
       setReservations((prev) =>
@@ -368,7 +451,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const markUsed = useCallback(
-    (reservationId: string): ReserveResult => {
+    async (reservationId: string): Promise<ReserveResult> => {
       const reservation = reservations.find((r) => r.id === reservationId);
       if (!reservation) {
         return { ok: false, message: "Reserva no encontrada." };
@@ -380,10 +463,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ok: false, message: "Esta reserva está cancelada." };
       }
 
+      const usedAt = nowISO();
+      try {
+        await updateReservationRow(reservationId, {
+          status: "Utilizada",
+          usedAt,
+        });
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
       setReservations((prev) =>
         prev.map((r) =>
           r.id === reservationId
-            ? { ...r, status: "Utilizada", usedAt: nowISO() }
+            ? { ...r, status: "Utilizada", usedAt }
             : r,
         ),
       );
@@ -428,7 +521,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const updateMeal: AppContextValue["updateMeal"] = useCallback(
-    (mealId, patch) => {
+    async (mealId, patch) => {
       const meal = meals.find((m) => m.id === mealId);
       if (!meal) return { ok: false, message: "Servicio no encontrado." };
 
@@ -459,24 +552,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }
 
+      const updated: Meal = { ...meal, ...patch, total, becarios };
+      try {
+        await updateMealRow(updated);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
       setMeals((prev) =>
-        prev.map((m) => (m.id === mealId ? { ...m, ...patch, total, becarios } : m)),
+        prev.map((m) => (m.id === mealId ? updated : m)),
       );
       return { ok: true, message: `Cupos de ${meal.nombre.toLowerCase()} actualizados.` };
     },
     [meals, reservations],
   );
 
-  const setReservasHabilitadas = useCallback((enabled: boolean) => {
-    setSettings((prev) => ({ ...prev, reservasHabilitadas: enabled }));
-  }, []);
+  const setReservasHabilitadas = useCallback(
+    async (enabled: boolean): Promise<ReserveResult> => {
+      try {
+        await updateSettingsRow(enabled);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+      setSettings((prev) => ({ ...prev, reservasHabilitadas: enabled }));
+      return {
+        ok: true,
+        message: enabled
+          ? "Reservas habilitadas para todos los estudiantes."
+          : "Reservas inhabilitadas temporalmente.",
+      };
+    },
+    [],
+  );
 
   /* -------------------------------------------------
      Estudiantes
      ------------------------------------------------- */
 
   const addStudent = useCallback(
-    (input: NewStudentInput): ReserveResult => {
+    async (input: NewStudentInput): Promise<ReserveResult> => {
       const nombre = input.nombre.trim();
       const correo = input.correo.trim().toLowerCase();
       const password = input.password.trim();
@@ -505,24 +619,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
         password,
       };
 
+      try {
+        await insertStudentRow(newStudent);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
       setStudents((prev) => [...prev, newStudent]);
       return { ok: true, message: `${nombre} fue agregado correctamente.` };
     },
     [students],
   );
 
-  const toggleStudentStatus = useCallback((studentId: string) => {
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? { ...s, activo: !s.activo } : s)),
-    );
-  }, []);
+  const toggleStudentStatus = useCallback(
+    async (studentId: string): Promise<ReserveResult> => {
+      const student = students.find((s) => s.id === studentId);
+      if (!student) {
+        return { ok: false, message: "Estudiante no encontrado." };
+      }
+
+      try {
+        await updateStudentRow(studentId, !student.activo);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId ? { ...s, activo: !s.activo } : s,
+        ),
+      );
+      return {
+        ok: true,
+        message: student.activo
+          ? `${student.nombre} fue desactivado.`
+          : `${student.nombre} fue reactivado.`,
+      };
+    },
+    [students],
+  );
 
   /* -------------------------------------------------
      Encuestas de comidas
      ------------------------------------------------- */
 
   const createSurvey = useCallback(
-    (input: NewSurveyInput): ReserveResult => {
+    async (input: NewSurveyInput): Promise<ReserveResult> => {
       const title = input.title.trim();
       const question = input.question.trim();
       const options = input.options.map((o) => o.trim()).filter(Boolean);
@@ -543,7 +685,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return Number.isFinite(n) && n > acc ? n : acc;
       }, 0);
 
-      const survey: Survey = {
+      const draft: Survey = {
         id: `ENC-${String(nextNumber + 1).padStart(3, "0")}`,
         title,
         question,
@@ -555,7 +697,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createdAt: nowISO(),
       };
 
-      setSurveys((prev) => [survey, ...prev]);
+      let saved: Survey;
+      try {
+        // En Supabase devuelve la encuesta con los ids reales de las opciones.
+        saved = await insertSurveyRow(draft);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
+      setSurveys((prev) => [saved, ...prev]);
       return {
         ok: true,
         message: `Encuesta «${title}» creada y abierta para votar.`,
@@ -564,19 +714,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [surveys],
   );
 
-  const toggleSurvey = useCallback((surveyId: string) => {
-    setSurveys((prev) =>
-      prev.map((s) => (s.id === surveyId ? { ...s, active: !s.active } : s)),
-    );
-  }, []);
+  const toggleSurvey = useCallback(
+    async (surveyId: string): Promise<ReserveResult> => {
+      const survey = surveys.find((s) => s.id === surveyId);
+      if (!survey) return { ok: false, message: "Encuesta no encontrada." };
 
-  const deleteSurvey = useCallback((surveyId: string) => {
-    setSurveys((prev) => prev.filter((s) => s.id !== surveyId));
-    setSurveyResponses((prev) => prev.filter((r) => r.surveyId !== surveyId));
-  }, []);
+      try {
+        await setSurveyActiveRow(surveyId, !survey.active);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
+      setSurveys((prev) =>
+        prev.map((s) => (s.id === surveyId ? { ...s, active: !s.active } : s)),
+      );
+      return {
+        ok: true,
+        message: survey.active
+          ? `«${survey.title}» se cerró: ya no se aceptan votos.`
+          : `«${survey.title}» se abrió para votar.`,
+      };
+    },
+    [surveys],
+  );
+
+  const deleteSurvey = useCallback(
+    async (surveyId: string): Promise<ReserveResult> => {
+      const survey = surveys.find((s) => s.id === surveyId);
+      if (!survey) return { ok: false, message: "Encuesta no encontrada." };
+
+      try {
+        await deleteSurveyRow(surveyId);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
+      setSurveys((prev) => prev.filter((s) => s.id !== surveyId));
+      setSurveyResponses((prev) => prev.filter((r) => r.surveyId !== surveyId));
+      return { ok: true, message: `Encuesta «${survey.title}» eliminada.` };
+    },
+    [surveys],
+  );
 
   const submitSurveyResponse = useCallback(
-    (surveyId: string, optionIds: string[]): ReserveResult => {
+    async (surveyId: string, optionIds: string[]): Promise<ReserveResult> => {
       if (!session) {
         return { ok: false, message: "Debes iniciar sesión para votar." };
       }
@@ -602,42 +783,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const existing = surveyResponses.find(
         (r) => r.surveyId === surveyId && r.studentId === student.id,
       );
+      const now = nowISO();
 
+      let response: SurveyResponse;
       if (existing) {
-        setSurveyResponses((prev) =>
-          prev.map((r) =>
-            r.id === existing.id
-              ? { ...r, optionIds: valid, updatedAt: nowISO() }
-              : r,
-          ),
-        );
-        return { ok: true, message: "Tu respuesta fue actualizada." };
-      }
+        response = { ...existing, optionIds: valid, updatedAt: now };
+      } else {
+        const nextNumber = surveyResponses.reduce((acc, r) => {
+          const n = Number(r.id.replace(/\D/g, ""));
+          return Number.isFinite(n) && n > acc ? n : acc;
+        }, 0);
 
-      const nextNumber = surveyResponses.reduce((acc, r) => {
-        const n = Number(r.id.replace(/\D/g, ""));
-        return Number.isFinite(n) && n > acc ? n : acc;
-      }, 0);
-
-      setSurveyResponses((prev) => [
-        ...prev,
-        {
+        response = {
           id: `RESP-${String(nextNumber + 1).padStart(3, "0")}`,
           surveyId,
           studentId: student.id,
           studentName: student.nombre,
           optionIds: valid,
-          createdAt: nowISO(),
-          updatedAt: nowISO(),
-        },
-      ]);
-      return { ok: true, message: "¡Gracias! Tu voto quedó registrado." };
+          createdAt: now,
+          updatedAt: now,
+        };
+      }
+
+      try {
+        await saveResponseRow(response, !existing);
+      } catch (err) {
+        return { ok: false, message: saveError(err) };
+      }
+
+      setSurveyResponses((prev) =>
+        existing
+          ? prev.map((r) => (r.id === existing.id ? response : r))
+          : [...prev, response],
+      );
+
+      return existing
+        ? { ok: true, message: "Tu respuesta fue actualizada." }
+        : { ok: true, message: "¡Gracias! Tu voto quedó registrado." };
     },
     [currentStudent, session, surveyResponses, surveys],
   );
 
   /* -------------------------------------------------
-     Restablecer demostración
+     Restablecer demostración (solo modo local)
      ------------------------------------------------- */
 
   const resetDemoData = useCallback(() => {
@@ -664,6 +852,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       settings,
       surveys,
       surveyResponses,
+      accounts,
+      loading,
+      dataSource,
       login,
       logout,
       reserve,
@@ -690,6 +881,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       settings,
       surveys,
       surveyResponses,
+      accounts,
+      loading,
+      dataSource,
       login,
       logout,
       reserve,

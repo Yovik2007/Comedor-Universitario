@@ -15,11 +15,23 @@ import { ConfirmModal, InfoRow } from "@/components/ui/Modal";
 import { STORAGE_KEYS } from "@/utils/storage";
 
 export function SettingsPage() {
-  const { resetDemoData, students, reservations, session } = useApp();
+  const { resetDemoData, students, reservations, session, dataSource } =
+    useApp();
   const { push } = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
 
+  const onSupabase = dataSource === "supabase";
+
   const handleReset = () => {
+    if (dataSource === "supabase") {
+      // En modo Supabase la restauración se hace desde el SQL Editor.
+      setConfirmReset(false);
+      push(
+        "info",
+        "Con Supabase, para restaurar los datos demo vuelve a ejecutar supabase/schema.sql en el SQL Editor de tu proyecto.",
+      );
+      return;
+    }
     resetDemoData();
     setConfirmReset(false);
     push("success", "Datos de demostración restablecidos correctamente.");
@@ -44,7 +56,9 @@ export function SettingsPage() {
                 Restablecer datos de demostración
               </h2>
               <p className="text-sm text-muted">
-                Recupera los valores originales del sistema.
+                {onSupabase
+                  ? "Los datos viven en Supabase: la restauración se hace desde el SQL Editor."
+                  : "Recupera los valores originales del sistema."}
               </p>
             </div>
           </div>
@@ -95,7 +109,9 @@ export function SettingsPage() {
                 Información del sistema
               </h2>
               <p className="text-sm text-muted">
-                Todo funciona localmente en tu navegador.
+                {onSupabase
+                  ? "Los datos se guardan en Supabase (proyecto COMEDOR UNJFSC)."
+                  : "Todo funciona localmente en tu navegador."}
               </p>
             </div>
           </div>
@@ -103,16 +119,23 @@ export function SettingsPage() {
           <div className="rounded-xl bg-surface/70 px-3 py-2 ring-1 ring-line">
             <InfoRow label="Sesión actual" value={session?.email ?? "—"} />
             <InfoRow label="Perfil" value={session?.nombre ?? "—"} />
-            <InfoRow label="Versión" value="1.0.0" />
-            <InfoRow label="Persistencia" value="localStorage" />
-            <InfoRow label="Backend" value="Sin conexión (demo)" />
+            <InfoRow label="Versión" value="1.1.0" />
+            <InfoRow
+              label="Persistencia"
+              value={onSupabase ? "Supabase + respaldo local" : "localStorage"}
+            />
+            <InfoRow
+              label="Base de datos"
+              value={onSupabase ? "COMEDOR UNJFSC (PostgreSQL)" : "Sin conexión (demo)"}
+            />
           </div>
 
           <div className="mt-4 flex items-start gap-2 rounded-xl bg-secondary-50 px-4 py-3 text-sm text-secondary">
             <ShieldCheck size={16} className="mt-0.5 shrink-0" />
             <p>
-              No se usa ningún servidor ni servicio externo: los datos se
-              almacenan únicamente en este equipo (localStorage).
+              {onSupabase
+                ? "Los datos se leen y escriben en la base de datos Supabase del comedor; en este navegador solo se guarda una copia de respaldo."
+                : "No se usa ningún servidor ni servicio externo: los datos se almacenan únicamente en este equipo (localStorage)."}
             </p>
           </div>
 
@@ -140,15 +163,19 @@ export function SettingsPage() {
         onClose={() => setConfirmReset(false)}
         onConfirm={handleReset}
         title="Restablecer datos de demostración"
-        question="¿Restablecer todos los datos de la demostración?"
-        confirmLabel="Sí, restablecer"
-        cancelLabel="Cancelar"
-        tone="danger"
+        question={
+          onSupabase
+            ? "Los datos viven en Supabase. ¿Cómo se restauran?"
+            : "¿Restablecer todos los datos de la demostración?"
+        }
+        confirmLabel={onSupabase ? "Entendido" : "Sí, restablecer"}
+        cancelLabel={onSupabase ? "Cerrar" : "Cancelar"}
+        tone={onSupabase ? "primary" : "danger"}
       >
         <p className="text-sm text-muted">
-          Se restaurarán los estudiantes, reservas, cupos y configuración
-          originales. Los cambios realizados durante la demostración se
-          perderán.
+          {onSupabase
+            ? "Esta demostración escribe en la base de datos, por lo que los datos se restauran ejecutando de nuevo supabase/schema.sql en el SQL Editor de Supabase (borra y vuelve a sembrar todo)."
+            : "Se restaurarán los estudiantes, reservas, cupos y configuración originales. Los cambios realizados durante la demostración se perderán."}
         </p>
       </ConfirmModal>
     </div>

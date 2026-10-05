@@ -4,8 +4,9 @@ Aplicación web para gestionar las reservas de alimentación del comedor univers
 los estudiantes reservan desayuno, almuerzo o cena y reciben un código/QR, el equipo
 administrativo controla cupos y estudiantes, y el kiosco valida el acceso.
 
-Todo funciona con **datos simulados** guardados en `localStorage`: no hay backend,
-ni servicios externos, ni claves de configuración.
+Los datos viven en **Supabase** (proyecto *COMEDOR UNJFSC*, PostgreSQL) cuando se
+configuran las credenciales en `.env`; sin ellas, la app funciona igual que antes con
+`localStorage` (modo demostración sin internet). No se usa Firebase ni ninguna otra API.
 
 ## Requisitos
 
@@ -32,6 +33,38 @@ Otros comandos:
 | `npm run build`     | Verifica tipos (`tsc --noEmit`) y genera `dist/`       |
 | `npm run preview`   | Sirve la compilación de producción                     |
 | `npm run typecheck` | Solo verifica TypeScript                               |
+
+## Base de datos (Supabase)
+
+La conexión se define en el archivo **`.env`** de la raíz (dos variables):
+
+| Variable                  | Contenido                                             |
+| ------------------------- | ----------------------------------------------------- |
+| `VITE_SUPABASE_URL`       | Project URL del proyecto (`https://xxxx.supabase.co`) |
+| `VITE_SUPABASE_ANON_KEY`  | Clave pública `anon` / publishable                    |
+
+```bash
+cp .env.example .env     # y pega tus credenciales
+npm run dev
+```
+
+Cómo se reparte el trabajo (ver `supabase/README.md` para el script SQL):
+
+- **Lecturas**: `AppContext` paga una única carga inicial desde las vistas
+  `vw_students`, `vw_app_users`, `vw_meals`, `vw_settings`, `vw_reservations`,
+  `vw_surveys` y `vw_survey_responses`, que devuelven exactamente los mismos
+  nombres de campo que los tipos de TypeScript.
+- **Escrituras**: cada acción (reservar, cancelar, validar, editar cupos,
+  crear/eliminar encuestas, votar…) escribe en la tabla base correspondiente
+  y solo actualiza la pantalla si la base confirmó la operación.
+- **Respaldo local**: mientras tanto, `localStorage` guarda una copia de los
+  datos; si Supabase no responde, la app avisa con un toast y sigue operativa
+  en modo local.
+- Si `.env` no tiene clave, todo funciona en modo local (sin peticiones de red).
+
+> ⚠ La clave `anon` es pública (va embebida en la web) y las políticas RLS del
+> script están abiertas **solo para esta demostración**. Para producción se
+> recomienda Supabase Auth y políticas por usuario.
 
 ## Sitio publicado (GitHub Pages)
 
@@ -134,7 +167,8 @@ administrativo ni viceversa; sin sesión, todo redirige a `/login`.
 - Validación por código con estados `✓ RESERVA VÁLIDA`, `⚠ Reserva ya utilizada`,
   `✕ Reserva cancelada` y `✕ Reserva no encontrada`.
 - **Restablecer datos de demostración** con confirmación (restaura estudiantes,
-  reservas, cupos, configuración y encuestas originales).
+  reservas, cupos, configuración y encuestas originales; en modo Supabase la
+  restauración se hace reejecutando `supabase/schema.sql`).
 
 ### Kiosco
 
@@ -153,7 +187,12 @@ administrativo ni viceversa; sin sesión, todo redirige a `/login`.
 
 ## Persistencia
 
-Los datos se guardan en `localStorage` bajo estas claves:
+La fuente de verdad es **Supabase** (esquema descrito en `supabase/schema.sql`):
+9 tablas (`students`, `app_users`, `meals`, `settings`, `reservations`, `surveys`,
+`survey_options`, `survey_responses`, `survey_response_options`), 10 vistas `vw_*`
+para leer y secuencias `RES-` / `ENC-` / `RESP-` para los códigos visibles.
+
+Además, cada navegador guarda una **copia de respaldo** en `localStorage` bajo estas claves:
 
 | Clave                        | Contenido                        |
 | ---------------------------- | -------------------------------- |
@@ -189,9 +228,11 @@ src/
 ├── context/            AppContext (estado global), ToastContext
 ├── data/               mockData (estudiantes, cuentas demo, servicios,
 │                       reservas y encuestas) y brand.ts (nombre y lema)
+├── lib/                supabase.ts (cliente y modo de conexión)
+├── services/           api.ts (lecturas/escrituras de la base de datos)
 ├── types/              Tipos compartidos
 ├── utils/              fechas, almacenamiento, reglas de reserva, formato
-├── App.tsx             Rutas y guardas de rol
+├── App.tsx             Rutas, pantalla de carga y guardas de rol
 └── main.tsx            Punto de entrada
 ```
 
@@ -208,4 +249,4 @@ Nombre actual: **UNJFSC Comedor digital**.
 
 ## Stack técnico
 
-React 19 · TypeScript · Vite · React Router 7 · Tailwind CSS 4 · lucide-react · qrcode.react
+React 19 · TypeScript · Vite · React Router 7 · Tailwind CSS 4 · Supabase (PostgreSQL) · lucide-react · qrcode.react

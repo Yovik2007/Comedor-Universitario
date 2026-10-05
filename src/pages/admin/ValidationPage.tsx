@@ -48,11 +48,11 @@ export function ValidationPage() {
     setCheckedCode(toCheck);
   };
 
-  const handleMarkUsed = () => {
+  const handleMarkUsed = async () => {
     const reservationId = outcome?.reservation?.id;
     if (!reservationId) return;
 
-    const result = markUsed(reservationId);
+    const result = await markUsed(reservationId);
     if (result.ok) push("success", result.message);
     else push("error", result.message);
   };

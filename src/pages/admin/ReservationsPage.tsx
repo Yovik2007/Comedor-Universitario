@@ -60,8 +60,8 @@ export function ReservationsPage() {
     setDateFilter("");
   };
 
-  const handleMarkUsed = (reservation: Reservation) => {
-    const result = markUsed(reservation.id);
+  const handleMarkUsed = async (reservation: Reservation) => {
+    const result = await markUsed(reservation.id);
     if (result.ok) {
       // El panel queda abierto para mostrar el nuevo estado "Utilizada".
       push("success", result.message);

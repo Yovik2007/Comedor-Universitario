@@ -40,8 +40,8 @@ export function SurveysPage() {
     });
   };
 
-  const handleSubmit = (surveyId: string, chosen: string[]) => {
-    const result = submitSurveyResponse(surveyId, chosen);
+  const handleSubmit = async (surveyId: string, chosen: string[]) => {
+    const result = await submitSurveyResponse(surveyId, chosen);
     if (result.ok) {
       push("success", result.message);
       // Se limpia la selección para que vuelva a leer la respuesta guardada.

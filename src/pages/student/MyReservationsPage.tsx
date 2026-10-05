@@ -38,9 +38,9 @@ export function MyReservationsPage() {
   const actives = mine.filter((r) => r.status === "Activa");
   const history = mine.filter((r) => r.status !== "Activa");
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!cancelTarget) return;
-    const result = cancelReservation(cancelTarget.id);
+    const result = await cancelReservation(cancelTarget.id);
     if (result.ok) push("success", result.message);
     else push("error", result.message);
     setCancelTarget(null);

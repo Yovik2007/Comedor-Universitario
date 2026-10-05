@@ -31,9 +31,9 @@ export function ReservePage() {
   const [confirmMeal, setConfirmMeal] = useState<Meal | null>(null);
   const today = todayISO();
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!confirmMeal) return;
-    const result = reserve(confirmMeal.id);
+    const result = await reserve(confirmMeal.id);
     if (result.ok) push("success", result.message);
     else push("error", result.message);
     setConfirmMeal(null);

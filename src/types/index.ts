@@ -1,6 +1,7 @@
 /**
  * Tipos centrales del sistema de reservas del UNJFSC Comedor digital.
- * Toda la información es simulada y se persiste en localStorage.
+ * Son idénticos a los campos que devuelven las vistas vw_* de Supabase
+ * (y a lo que se guarda en localStorage en modo local).
  */
 
 export type StudentType = "Becario" | "Libre";

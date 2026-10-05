@@ -14,7 +14,6 @@ import { useApp } from "@/context/AppContext";
 import { useToast } from "@/context/ToastContext";
 import { Button } from "@/components/ui/Button";
 import { Field, inputCls } from "@/components/ui/Field";
-import { demoAccounts } from "@/data/mockData";
 import { BRAND } from "@/data/brand";
 
 const features = [
@@ -37,22 +36,8 @@ const features = [
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Cuentas agrupadas por rol para el listado del login. */
-const accountGroups = [
-  {
-    label: "Administradores",
-    icon: ShieldCheck,
-    accounts: demoAccounts.filter((acc) => acc.role === "admin"),
-  },
-  {
-    label: "Estudiantes",
-    icon: UtensilsCrossed,
-    accounts: demoAccounts.filter((acc) => acc.role === "estudiante"),
-  },
-];
-
 export function LoginPage() {
-  const { login } = useApp();
+  const { login, accounts } = useApp();
   const { push } = useToast();
   const navigate = useNavigate();
 
@@ -63,6 +48,20 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   // Las cuentas demo quedan ocultas por defecto: el login muestra solo el formulario.
   const [showDemo, setShowDemo] = useState(false);
+
+  // Cuentas agrupadas por rol (se leen de la base de datos en modo Supabase).
+  const accountGroups = [
+    {
+      label: "Administradores",
+      icon: ShieldCheck,
+      accounts: accounts.filter((acc) => acc.role === "admin"),
+    },
+    {
+      label: "Estudiantes",
+      icon: UtensilsCrossed,
+      accounts: accounts.filter((acc) => acc.role === "estudiante"),
+    },
+  ];
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

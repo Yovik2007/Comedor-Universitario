@@ -60,7 +60,7 @@ export function KioskPage() {
     navigate("/login", { replace: true });
   };
 
-  const validate = (rawCode: string) => {
+  const validate = async (rawCode: string) => {
     const outcome = validateCode(rawCode);
 
     if (outcome.kind === "empty") {
@@ -69,12 +69,14 @@ export function KioskPage() {
     }
 
     if (outcome.kind === "valid" && outcome.reservation) {
-      const markResult = markUsed(outcome.reservation.id);
-      if (markResult.ok) {
-        push("success", `Acceso concedido a ${outcome.reservation.studentName}.`);
-      } else {
+      const markResult = await markUsed(outcome.reservation.id);
+      if (!markResult.ok) {
+        // No se pudo registrar el uso en la base: no se concede el acceso.
         push("error", markResult.message);
+        setCode("");
+        return;
       }
+      push("success", `Acceso concedido a ${outcome.reservation.studentName}.`);
       setResult({
         kind: "valid",
         reservationId: outcome.reservation.id,
