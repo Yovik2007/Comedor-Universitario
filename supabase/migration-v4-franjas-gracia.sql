@@ -70,12 +70,14 @@ select r.id,
        end                                as "time",
        r.status::text                     as "status",
        r.qr_code                          as "qrCode",
+       r.created_at                       as "createdAt",
+       r.used_at                          as "usedAt",
+       -- Nuevas columnas SIEMPRE al final: CREATE OR REPLACE VIEW no
+       -- permite reordenar ni renombrar columnas existentes.
        case when r.slot_start is null then null
             else to_char(r.slot_start, 'HH24:MI')
        end                                as "slotStart",
-       r.expires_at                       as "expiresAt",
-       r.created_at                       as "createdAt",
-       r.used_at                          as "usedAt"
+       r.expires_at                       as "expiresAt"
 from reservations r
 join students s on s.id = r.student_id
 join meals    m on m.id = r.meal_id;
