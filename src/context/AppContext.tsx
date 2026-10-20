@@ -53,6 +53,7 @@ import {
   expiresAtISO,
   freeQuota,
   generateReservationCode,
+  slotIsPast,
   slotOccupancy,
   validateReservationCode,
 } from "@/utils/reservationUtils";
@@ -630,6 +631,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       // Opción A: un solo intento por servicio y fecha.
+      // Franja ya vencida: reservarla daría una reserva muerta al instante
+      // y, con la opción A, el estudiante perdería su único intento del día.
+      if (slotIsPast(date, chosen.start, now)) {
+        return {
+          ok: false,
+          message: `La franja ${chosen.label} ya pasó. Elige una franja posterior.`,
+        };
+      }
+
       const previous = blockingReservation(
         reservations,
         student.id,

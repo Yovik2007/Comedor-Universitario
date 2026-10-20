@@ -20,7 +20,7 @@ function entryWrite() {
   fs.writeFileSync(
     entry,
     `
-import { buildSlots, slotLimit, computeMealStats, effectiveStatus, expiresAtISO, slotOccupancy, validateReservationCode, blockingReservation, SLOT_MINUTES, GRACE_MINUTES } from "@/utils/reservationUtils";
+import { buildSlots, slotLimit, computeMealStats, effectiveStatus, expiresAtISO, slotOccupancy, validateReservationCode, blockingReservation, slotIsPast, bookableSlots, SLOT_MINUTES, GRACE_MINUTES } from "@/utils/reservationUtils";
 import { minutesToTime, timeToMinutes } from "@/utils/dates";
 import type { Meal, Reservation } from "@/types";
 
@@ -155,7 +155,42 @@ check(
   undefined,
 );
 
-console.log(failures === 0 ? "\\nTODO OK" : "\\n" + failures + " VERIFICACIONES FALLARON");
+console.log("\\n7) Franjas pasadas no se pueden reservar");
+check(
+  "franja de 07:00 con gracia hasta 07:30, a las 18:31 -> pasada",
+  slotIsPast("2026-10-20", "07:00", new Date("2026-10-20T23:31:00.000Z")),
+  true,
+);
+check(
+  "franja de 19:00 a las 18:31 -> todavia se puede",
+  slotIsPast("2026-10-20", "19:00", new Date("2026-10-20T23:31:00.000Z")),
+  false,
+);
+check(
+  "en el limite exacto (gracia vencida) -> pasada",
+  slotIsPast("2026-10-20", "12:00", new Date("2026-10-20T17:30:00.000Z")),
+  true,
+);
+check(
+  "1 segundo antes del limite -> todavia no",
+  slotIsPast("2026-10-20", "12:00", new Date("2026-10-20T17:29:59.000Z")),
+  false,
+);
+const cena = meal({ id: "cena", inicio: "18:00", fin: "20:00", total: 1500, becarios: 818 });
+const ahora = new Date("2026-10-20T23:31:00.000Z"); // 18:31 local
+check(
+  "cena a las 18:31 -> quedan 3 de 4 franjas",
+  bookableSlots(cena, "2026-10-20", ahora).map((s) => s.start),
+  ["18:30", "19:00", "19:30"],
+);
+check(
+  "desayuno por la noche -> ninguna franja reservable",
+  bookableSlots(meal({ id: "desayuno", inicio: "07:00", fin: "09:00", total: 1000, becarios: 546 }), "2026-10-20", ahora).length,
+  0,
+);
+
+console.log("");
+console.log(failures === 0 ? "TODO OK" : failures + " VERIFICACIONES FALLARON");
 process.exit(failures === 0 ? 0 : 1);
 `,
   );

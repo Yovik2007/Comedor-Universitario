@@ -84,6 +84,28 @@ export function isExpired(reservation: Reservation, now = new Date()): boolean {
 }
 
 /**
+ * true si la ventana de gracia de una franja **ya pasó**: no se puede
+ * reservar. Sin esta validación el estudiante reservaría una hora muerta,
+ * su cupo quedaría `Vencida` al instante y perdería su único intento del día.
+ */
+export function slotIsPast(
+  date: string,
+  slotStart: string,
+  now: Date = new Date(),
+): boolean {
+  return new Date(expiresAtISO(date, slotStart)).getTime() <= now.getTime();
+}
+
+/** Franjas de un servicio que todavía se pueden reservar. */
+export function bookableSlots(
+  meal: Meal,
+  date: string,
+  now: Date = new Date(),
+): MealSlot[] {
+  return buildSlots(meal).filter((s) => !slotIsPast(date, s.start, now));
+}
+
+/**
  * Estado real de la reserva. Una `Activa` cuya franja ya venció se comporta
  * como `Vencida` sin necesidad de escribir en la base de datos.
  */

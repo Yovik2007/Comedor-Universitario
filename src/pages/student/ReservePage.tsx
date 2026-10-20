@@ -23,6 +23,7 @@ import {
   availableForType,
   buildSlots,
   effectiveStatus,
+  slotIsPast,
   slotOccupancy,
 } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
@@ -45,9 +46,10 @@ export function ReservePage() {
   const openConfirm = (meal: Meal) => {
     const slots = buildSlots(meal);
     const occupancy = slotOccupancy(meal, reservations, today);
-    // Por defecto se preselecciona la primera franja que todavía tiene espacio.
+    // Por defecto se preselecciona la primera franja libre que aún no pasó.
     const firstFree = slots.find(
-      (s) => (occupancy[s.start] ?? 0) < s.limit,
+      (s) =>
+        (occupancy[s.start] ?? 0) < s.limit && !slotIsPast(today, s.start),
     );
     setSelectedSlot(firstFree?.start ?? null);
     setConfirmMeal(meal);
@@ -106,6 +108,9 @@ export function ReservePage() {
               r.date === today &&
               r.status !== "Cancelada",
           );
+          const slotsAvailable = buildSlots(meal).some(
+            (s) => !slotIsPast(today, s.start),
+          );
 
           return (
             <MealCard
@@ -119,6 +124,7 @@ export function ReservePage() {
                 myReservation ? effectiveStatus(myReservation) : null
               }
               reservationsOpen={reservationsOpen && meal.habilitado}
+              slotsAvailable={slotsAvailable}
               onReserve={() => openConfirm(meal)}
             />
           );
@@ -204,20 +210,22 @@ function SlotPicker({
         {slots.map((slot) => {
           const used = occupancy[slot.start] ?? 0;
           const free = Math.max(slot.limit - used, 0);
+          const past = slotIsPast(date, slot.start);
           const full = free <= 0;
+          const disabled = full || past;
           const isSelected = selected === slot.start;
 
           return (
             <button
               key={slot.start}
               type="button"
-              disabled={full}
+              disabled={disabled}
               onClick={() => onSelect(slot.start)}
               aria-pressed={isSelected}
               className={`rounded-xl border px-2 py-2 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 isSelected
                   ? "border-primary bg-primary text-white"
-                  : full
+                  : disabled
                     ? "cursor-not-allowed border-line bg-surface text-muted opacity-60"
                     : "border-line bg-white text-ink hover:border-primary"
               }`}
@@ -230,12 +238,18 @@ function SlotPicker({
                   isSelected ? "text-white/85" : "text-muted"
                 }`}
               >
-                {full ? "Llena" : `${free} cupos`}
+                {past ? "Ya pasó" : full ? "Llena" : `${free} cupos`}
               </span>
             </button>
           );
         })}
       </div>
+
+      {slots.every((s) => slotIsPast(date, s.start)) && (
+        <p className="mt-2 rounded-lg bg-warning-50 px-3 py-2 text-xs font-medium text-warning-700 ring-1 ring-warning/25">
+          Todas las franjas de este servicio ya pasaron.
+        </p>
+      )}
 
       <p className="mt-2 text-xs leading-relaxed text-muted">
         Tienes <strong>30 minutos</strong> desde el inicio de tu franja para
@@ -259,6 +273,8 @@ interface MealCardProps {
   /** Estado de la reserva del estudiante para este servicio hoy (si existe). */
   myStatus: ReservationStatus | null;
   reservationsOpen: boolean;
+  /** ¿Queda alguna franja de 30 min que aún no haya pasado? */
+  slotsAvailable: boolean;
   onReserve: () => void;
 }
 
@@ -270,12 +286,14 @@ function MealCard({
   tipoEstudiante,
   myStatus,
   reservationsOpen,
+  slotsAvailable,
   onReserve,
 }: MealCardProps) {
   // Opción A: un intento por servicio y fecha. Si la reserva venció, su cupo
   // ya se transfirió a los libres y este estudiante no puede reservar otra vez.
   const reservedByMe = myStatus === "Activa" || myStatus === "Utilizada";
   const expired = myStatus === "Vencida";
+  const finished = !slotsAvailable && myStatus === null;
   const soldOut = remaining <= 0 && !reservedByMe;
 
   return (
@@ -302,6 +320,8 @@ function MealCard({
           <Badge variant="warning" dot>
             Vencida
           </Badge>
+        ) : finished ? (
+          <Badge variant="neutral">Finalizado</Badge>
         ) : !reservationsOpen ? (
           <Badge variant="warning">Cerrado</Badge>
         ) : soldOut ? (
@@ -403,6 +423,10 @@ function MealCard({
         ) : expired ? (
           <Button fullWidth variant="outline" disabled icon={<Lock size={16} />}>
             Cupo liberado · no reservable
+          </Button>
+        ) : finished ? (
+          <Button fullWidth variant="outline" disabled icon={<Lock size={16} />}>
+            Servicio finalizado hoy
           </Button>
         ) : soldOut ? (
           <Button fullWidth disabled icon={<Lock size={16} />}>
