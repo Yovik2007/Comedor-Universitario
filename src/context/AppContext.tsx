@@ -46,13 +46,13 @@ import { STORAGE_KEYS, loadJSON, saveJSON } from "@/utils/storage";
 import { nowISO, todayISO } from "@/utils/dates";
 import {
   availableForType,
+  blockingReservation,
   buildSlots,
   computeMealStats,
   effectiveStatus,
   expiresAtISO,
   freeQuota,
   generateReservationCode,
-  occupiesSlot,
   slotOccupancy,
   validateReservationCode,
 } from "@/utils/reservationUtils";
@@ -629,18 +629,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const duplicate = reservations.some(
-        (r) =>
-          r.studentId === student.id &&
-          r.mealId === mealId &&
-          r.date === date &&
-          // Una reserva vencida ya no bloquea: el estudiante puede reservar otra.
-          occupiesSlot(effectiveStatus(r, now)),
+      // Opción A: un solo intento por servicio y fecha.
+      const previous = blockingReservation(
+        reservations,
+        student.id,
+        mealId,
+        date,
       );
-      if (duplicate) {
+      if (previous) {
+        const estado = effectiveStatus(previous, now);
         return {
           ok: false,
-          message: `Ya tienes una reserva de ${meal.nombre.toLowerCase()} para hoy.`,
+          message:
+            estado === "Vencida"
+              ? `Tu reserva de ${meal.nombre.toLowerCase()} venció (franja de ${previous.slotStart ?? "inicio"}) y su cupo pasó a los estudiantes libres. No puedes volver a reservar este servicio hoy.`
+              : `Ya tienes una reserva de ${meal.nombre.toLowerCase()} para hoy.`,
         };
       }
 

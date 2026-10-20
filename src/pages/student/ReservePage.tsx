@@ -128,9 +128,11 @@ export function ReservePage() {
       <div className="mt-6 flex items-start gap-3 rounded-xl bg-white px-4 py-3.5 text-sm text-muted ring-1 ring-line">
         <Info size={17} className="mt-0.5 shrink-0 text-secondary" />
         <p>
-          Cada estudiante puede mantener <strong>una sola reserva por servicio y
-          fecha</strong>. Al cancelar, el cupo se libera automáticamente para
-          otros compañeros.
+          Cada estudiante tiene <strong>un solo intento por servicio y
+          fecha</strong>: debes presentarte dentro de los 30 minutos de tu
+          franja. Si no llegas, la reserva vence, su cupo pasa a los
+          estudiantes libres y no podrás volver a reservar ese servicio hoy.
+          Si cancelas a tiempo, el cupo queda libre para otros compañeros.
         </p>
       </div>
 
@@ -270,7 +272,8 @@ function MealCard({
   reservationsOpen,
   onReserve,
 }: MealCardProps) {
-  // Una reserva vencida ya no bloquea al estudiante: puede reservar otra vez.
+  // Opción A: un intento por servicio y fecha. Si la reserva venció, su cupo
+  // ya se transfirió a los libres y este estudiante no puede reservar otra vez.
   const reservedByMe = myStatus === "Activa" || myStatus === "Utilizada";
   const expired = myStatus === "Vencida";
   const soldOut = remaining <= 0 && !reservedByMe;
@@ -377,6 +380,17 @@ function MealCard({
         <strong className="text-ink">{remaining} disponible(s)</strong>
       </p>
 
+      {expired && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg bg-warning-50 px-3 py-2 text-xs leading-relaxed text-warning-700 ring-1 ring-warning/25">
+          <Info size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Tu reserva venció y su cupo se transfirió a los estudiantes
+            libres. Cada servicio admite <strong>un solo intento por día</strong>,
+            por lo que no puedes volver a reservarlo hoy.
+          </span>
+        </p>
+      )}
+
       <div className="mt-4">
         {myStatus === "Activa" ? (
           <Button fullWidth variant="success" disabled icon={<CheckCircle2 size={16} />}>
@@ -387,8 +401,8 @@ function MealCard({
             Reserva ya utilizada
           </Button>
         ) : expired ? (
-          <Button fullWidth onClick={onReserve} variant="outline" icon={<CalendarDays size={16} />}>
-            Reservar de nuevo
+          <Button fullWidth variant="outline" disabled icon={<Lock size={16} />}>
+            Cupo liberado · no reservable
           </Button>
         ) : soldOut ? (
           <Button fullWidth disabled icon={<Lock size={16} />}>

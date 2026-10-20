@@ -5,6 +5,7 @@
 
 import type {
   Meal,
+  MealId,
   Reservation,
   ReservationStatus,
   StudentType,
@@ -93,8 +94,31 @@ export function effectiveStatus(
   return isExpired(reservation, now) ? "Vencida" : reservation.status;
 }
 
-/** Ocupación por franja: cuántas reservas ya hay en cada tramo de 30 min. */
-export function slotOccupancy(
+/**
+ * REGLA (opción A): un solo intento por servicio y fecha.
+ *
+ * Devuelve la reserva que bloquea un nuevo intento, si existe:
+ *  · `Cancelada`   → no bloquea (el estudiante renunció por voluntad propia).
+ *  · `Vencida`     → bloquea: su cupo ya se transfirió a los libres y volver
+ *                    a reservar sería acaparo.
+ *  · `Activa` / `Utilizada` → bloquea.
+ */
+export function blockingReservation(
+  reservations: Reservation[],
+  studentId: string,
+  mealId: MealId,
+  date: string,
+): Reservation | undefined {
+  return reservations.find(
+    (r) =>
+      r.studentId === studentId &&
+      r.mealId === mealId &&
+      r.date === date &&
+      r.status !== "Cancelada",
+  );
+}
+
+/** Ocupación por franja: cuántas reservas ya hay en cada tramo de 30 min. */export function slotOccupancy(
   meal: Meal,
   reservations: Reservation[],
   date: string,

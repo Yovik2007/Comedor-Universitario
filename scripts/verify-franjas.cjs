@@ -20,7 +20,7 @@ function entryWrite() {
   fs.writeFileSync(
     entry,
     `
-import { buildSlots, slotLimit, computeMealStats, effectiveStatus, expiresAtISO, slotOccupancy, validateReservationCode, SLOT_MINUTES, GRACE_MINUTES } from "@/utils/reservationUtils";
+import { buildSlots, slotLimit, computeMealStats, effectiveStatus, expiresAtISO, slotOccupancy, validateReservationCode, blockingReservation, SLOT_MINUTES, GRACE_MINUTES } from "@/utils/reservationUtils";
 import { minutesToTime, timeToMinutes } from "@/utils/dates";
 import type { Meal, Reservation } from "@/types";
 
@@ -125,6 +125,35 @@ const cvOk = validateReservationCode("RES-00001", [res({ slotStart: "12:00", exp
 check("codigo vigente aceptado", cvOk.kind, "valid");
 const cvUsed = validateReservationCode("RES-00001", [res({ status: "Utilizada" })], despues);
 check("codigo ya usado", cvUsed.kind, "used");
+
+console.log("\\n6) Opcion A: un solo intento por servicio y fecha");
+const buscar = (lista: Reservation[]) =>
+  blockingReservation(lista, "EST001", "almuerzo", "2026-10-20");
+check("sin reservas previas -> puede reservar", buscar([]), undefined);
+check("Activa bloquea", buscar([res({ status: "Activa" })])?.status, "Activa");
+check("Utilizada bloquea", buscar([res({ status: "Utilizada" })])?.status, "Utilizada");
+check("Cancelada NO bloquea", buscar([res({ status: "Cancelada" })]), undefined);
+check("Vencida bloquea", buscar([res({ status: "Vencida" })])?.status, "Vencida");
+check(
+  "Activa ya vencida por tiempo tambien bloquea",
+  buscar([res({ expiresAt: "2026-10-20T17:30:00.000Z" })])?.id,
+  "RES-00001",
+);
+check(
+  "otro servicio no bloquea",
+  blockingReservation([res({ status: "Activa" })], "EST001", "cena", "2026-10-20"),
+  undefined,
+);
+check(
+  "otro dia no bloquea",
+  blockingReservation([res({ status: "Activa" })], "EST001", "almuerzo", "2026-10-21"),
+  undefined,
+);
+check(
+  "otro estudiante no bloquea",
+  blockingReservation([res({ status: "Activa" })], "EST099", "almuerzo", "2026-10-20"),
+  undefined,
+);
 
 console.log(failures === 0 ? "\\nTODO OK" : "\\n" + failures + " VERIFICACIONES FALLARON");
 process.exit(failures === 0 ? 0 : 1);
