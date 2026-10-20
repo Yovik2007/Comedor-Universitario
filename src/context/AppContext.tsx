@@ -46,9 +46,14 @@ import { STORAGE_KEYS, loadJSON, saveJSON } from "@/utils/storage";
 import { nowISO, todayISO } from "@/utils/dates";
 import {
   availableForType,
+  buildSlots,
   computeMealStats,
+  effectiveStatus,
+  expiresAtISO,
   freeQuota,
   generateReservationCode,
+  occupiesSlot,
+  slotOccupancy,
   validateReservationCode,
 } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
@@ -120,7 +125,7 @@ interface AppContextValue {
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
 
-  reserve: (mealId: MealId) => Promise<ReserveResult>;
+  reserve: (mealId: MealId, slotStart?: string) => Promise<ReserveResult>;
   cancelReservation: (reservationId: string) => Promise<ReserveResult>;
   markUsed: (reservationId: string) => Promise<ReserveResult>;
   validateCode: (code: string) => ValidationOutcome;
@@ -469,6 +474,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getMealStats = useCallback(
     (mealId: MealId, date: string = todayISO()): MealStats => {
       const meal = meals.find((m) => m.id === mealId);
+
+      // Reservas vencidas del día. Se calculan igual en ambos modos de datos
+      // porque los cupos de becarios vencidos pasan a los libres.
+      const now = new Date();
+      const dayReservations = reservations.filter(
+        (r) => r.mealId === mealId && r.date === date,
+      );
+      const vencidas = dayReservations.filter(
+        (r) => effectiveStatus(r, now) === "Vencida",
+      ).length;
+      const becariosLiberados = dayReservations.filter(
+        (r) =>
+          r.studentType === "Becario" &&
+          effectiveStatus(r, now) === "Vencida",
+      ).length;
+
       if (!meal) {
         return {
           becariosQuota: 0,
@@ -481,6 +502,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           dispLibres: 0,
           dispTotal: 0,
           percentOcupado: 0,
+          becariosLiberados,
+          vencidas,
         };
       }
 
@@ -501,6 +524,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             dispLibres: freeQuota(meal),
             dispTotal: meal.total,
             percentOcupado: 0,
+            becariosLiberados,
+            vencidas,
           };
         }
         return {
@@ -514,6 +539,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           dispLibres: row.dispLibres,
           dispTotal: row.dispTotal,
           percentOcupado: row.percentOcupado,
+          becariosLiberados,
+          vencidas,
         };
       }
 
@@ -564,7 +591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      ------------------------------------------------- */
 
   const reserve = useCallback(
-    async (mealId: MealId): Promise<ReserveResult> => {
+    async (mealId: MealId, slotStart?: string): Promise<ReserveResult> => {
       if (!session) {
         return { ok: false, message: "Debes iniciar sesión para reservar." };
       }
@@ -590,18 +617,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const date = todayISO();
+      const now = new Date();
+
+      // Franja de 30 minutos elegida. Si no se indicó, se usa la primera.
+      const slots = buildSlots(meal);
+      const chosen = slots.find((s) => s.start === slotStart) ?? slots[0];
+      if (!chosen) {
+        return {
+          ok: false,
+          message: "Este servicio no tiene franjas disponibles.",
+        };
+      }
 
       const duplicate = reservations.some(
         (r) =>
           r.studentId === student.id &&
           r.mealId === mealId &&
           r.date === date &&
-          r.status !== "Cancelada",
+          // Una reserva vencida ya no bloquea: el estudiante puede reservar otra.
+          occupiesSlot(effectiveStatus(r, now)),
       );
       if (duplicate) {
         return {
           ok: false,
           message: `Ya tienes una reserva de ${meal.nombre.toLowerCase()} para hoy.`,
+        };
+      }
+
+      // Capacidad máxima de llegadas por franja: evita que todos caigan
+      // en la misma hora y se vuelva a formar fila.
+      const occupancy = slotOccupancy(meal, reservations, date, now);
+      if ((occupancy[chosen.start] ?? 0) >= chosen.limit) {
+        return {
+          ok: false,
+          message: `La franja ${chosen.label} ya está llena (${chosen.limit} personas). Elige otra hora.`,
         };
       }
 
@@ -633,8 +682,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         mealId: meal.id,
         mealName: meal.nombre,
         date,
-        time: meal.horario,
+        time: chosen.label,
         status: "Activa",
+        slotStart: chosen.start,
+        expiresAt: expiresAtISO(date, chosen.start),
         qrCode: JSON.stringify({
           reservationId: id,
           studentId: student.id,
@@ -654,7 +705,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void refreshMealStats();
       return {
         ok: true,
-        message: `Reserva de ${meal.nombre.toLowerCase()} creada correctamente.`,
+        message: `Reserva creada para el ${meal.nombre.toLowerCase()} de ${chosen.label}. Preséntate antes de las ${chosen.end}.`,
       };
     },
     [
@@ -712,6 +763,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if (reservation.status === "Cancelada") {
         return { ok: false, message: "Esta reserva está cancelada." };
+      }
+
+      // Ventana de gracia: si la franja ya pasó, la reserva queda vencida y
+      // su cupo (de becario o libre) pasa a estar disponible para otros.
+      if (effectiveStatus(reservation) === "Vencida") {
+        try {
+          await updateReservationRow(reservationId, { status: "Vencida" });
+        } catch {
+          /* el estado en pantalla no depende de esta escritura */
+        }
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.id === reservationId ? { ...r, status: "Vencida" } : r,
+          ),
+        );
+        void refreshMealStats();
+        return {
+          ok: false,
+          message: `Reserva ${reservation.id} vencida: la franja de ${reservation.slotStart ?? "inicio"} ya pasó. El cupo fue liberado.`,
+        };
       }
 
       const usedAt = nowISO();

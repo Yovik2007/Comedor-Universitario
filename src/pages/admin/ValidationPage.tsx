@@ -18,7 +18,7 @@ import { Field, inputCls } from "@/components/ui/Field";
 import { InfoRow } from "@/components/ui/Modal";
 import { formatLong } from "@/utils/dates";
 import { formatClock } from "@/utils/text";
-import { validateReservationCode } from "@/utils/reservationUtils";
+import { effectiveStatus, validateReservationCode } from "@/utils/reservationUtils";
 import type { Reservation, ValidationOutcome } from "@/types";
 
 export function ValidationPage() {
@@ -33,7 +33,9 @@ export function ValidationPage() {
   const outcome: ValidationOutcome | null =
     checkedCode === null ? null : validateReservationCode(checkedCode, reservations);
 
-  const activeToday = reservations.filter((r) => r.status === "Activa").slice(0, 6);
+  const activeToday = reservations
+    .filter((r) => effectiveStatus(r) === "Activa")
+    .slice(0, 6);
 
   const handleValidate = (value?: string) => {
     const toCheck = (value ?? code).trim();
@@ -206,6 +208,18 @@ function ValidationResult({
         <Details reservation={reservation} />
         <p className="mt-3 text-sm font-medium text-danger-700">
           El estudiante canceló esta reserva; no se permite el acceso.
+        </p>
+      </ResultPanel>
+    );
+  }
+
+  if (outcome.kind === "expired") {
+    return (
+      <ResultPanel tone="warning" icon={<AlertTriangle size={34} />} title="⚠ Reserva vencida.">
+        <Details reservation={reservation} />
+        <p className="mt-3 text-sm font-medium text-warning-700">
+          Pasó la franja y la ventana de gracia sin usarse. El cupo fue
+          liberado automáticamente para otro estudiante.
         </p>
       </ResultPanel>
     );

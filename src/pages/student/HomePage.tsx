@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { currentMinutes, todayISO } from "@/utils/dates";
-import { serviceSchedule } from "@/utils/reservationUtils";
+import { effectiveStatus, serviceSchedule } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
 import type { Meal } from "@/types";
 
@@ -54,7 +54,10 @@ export function HomePage() {
   const myActiveToday = useMemo(
     () =>
       reservations.filter(
-        (r) => r.studentId === studentId && r.date === today && r.status === "Activa",
+        (r) =>
+          r.studentId === studentId &&
+          r.date === today &&
+          effectiveStatus(r) === "Activa",
       ),
     [reservations, studentId, today],
   );
@@ -218,9 +221,19 @@ export function HomePage() {
                   <Badge variant="info">{stats.dispLibres} libres</Badge>
                   {myRes && (
                     <Badge
-                      variant={myRes.status === "Activa" ? "success" : "info"}
+                      variant={
+                        effectiveStatus(myRes) === "Activa"
+                          ? "success"
+                          : effectiveStatus(myRes) === "Vencida"
+                            ? "warning"
+                            : "info"
+                      }
                     >
-                      {myRes.status === "Activa" ? "Reservado" : "Utilizado"}
+                      {effectiveStatus(myRes) === "Activa"
+                        ? "Reservado"
+                        : effectiveStatus(myRes) === "Vencida"
+                          ? "Vencida"
+                          : "Utilizado"}
                     </Badge>
                   )}
                 </div>

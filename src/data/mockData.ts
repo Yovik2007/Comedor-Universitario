@@ -15,6 +15,7 @@ import type {
   SurveyResponse,
 } from "@/types";
 import { addDays, todayISO } from "@/utils/dates";
+import { buildSlots, expiresAtISO } from "@/utils/reservationUtils";
 
 /* ---------------------------------------------------------
    Estudiantes
@@ -116,8 +117,8 @@ export const initialMeals: Meal[] = [
     horario: "7:00 AM - 9:00 AM",
     inicio: "07:00",
     fin: "09:00",
-    total: 50,
-    becarios: 30,
+    total: 1000,
+    becarios: 546,
     habilitado: true,
   },
   {
@@ -126,8 +127,8 @@ export const initialMeals: Meal[] = [
     horario: "12:00 PM - 2:30 PM",
     inicio: "12:00",
     fin: "14:30",
-    total: 120,
-    becarios: 70,
+    total: 3000,
+    becarios: 1637,
     habilitado: true,
   },
   {
@@ -136,8 +137,8 @@ export const initialMeals: Meal[] = [
     horario: "6:00 PM - 8:00 PM",
     inicio: "18:00",
     fin: "20:00",
-    total: 80,
-    becarios: 45,
+    total: 1500,
+    becarios: 818,
     habilitado: true,
   },
 ];
@@ -229,6 +230,12 @@ export function createSeedReservations(): Reservation[] {
     const date = addDays(today, row.offset);
     const id = formatReservationCode(counter);
 
+    // Franja de 30 minutos: se reparten entre los tramos del servicio para
+    // que la demostración muestre franjas vencidas y franjas aún vigentes.
+    const slots = buildSlots(meal);
+    const slot = slots.length > 0 ? slots[counter % slots.length] : undefined;
+    const slotStart = slot?.start;
+
     return [
       {
         id,
@@ -238,8 +245,10 @@ export function createSeedReservations(): Reservation[] {
         mealId: meal.id,
         mealName: meal.nombre,
         date,
-        time: meal.horario,
+        time: slot ? `${slot.start} – ${slot.end}` : meal.horario,
         status: row.status,
+        ...(slotStart ? { slotStart } : {}),
+        ...(slotStart ? { expiresAt: expiresAtISO(date, slotStart) } : {}),
         qrCode: JSON.stringify({
           reservationId: id,
           studentId: student.id,

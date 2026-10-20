@@ -10,7 +10,12 @@ export type MealId = "desayuno" | "almuerzo" | "cena";
 
 export type MealName = "Desayuno" | "Almuerzo" | "Cena";
 
-export type ReservationStatus = "Activa" | "Utilizada" | "Cancelada";
+export type ReservationStatus =
+  | "Activa"
+  | "Utilizada"
+  | "Cancelada"
+  /** La reserva venció: pasó la franja y la ventana de gracia sin usarse. */
+  | "Vencida";
 
 export type UserRole = "estudiante" | "admin";
 
@@ -55,6 +60,13 @@ export interface Reservation {
   /** Horario del servicio al que pertenece. */
   time: string;
   status: ReservationStatus;
+  /**
+   * Inicio de la franja elegida ("12:00"). Las franjas duran 30 minutos.
+   * Si no existe (reservas antiguas), se toma el inicio del servicio.
+   */
+  slotStart?: string;
+  /** Momento en que la reserva vence (ISO). Si no existe, no vence. */
+  expiresAt?: string;
   /** JSON simulado embebido en el código QR. */
   qrCode: string;
   createdAt: string;
@@ -90,6 +102,8 @@ export type ValidationResultKind =
   | "valid"
   | "used"
   | "canceled"
+  /** La reserva venció: pasó la franja y la ventana de gracia. */
+  | "expired"
   | "not_found"
   | "empty";
 

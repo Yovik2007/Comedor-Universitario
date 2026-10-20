@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmModal, InfoRow, Modal } from "@/components/ui/Modal";
 import { formatLong, formatShort } from "@/utils/dates";
+import { effectiveStatus } from "@/utils/reservationUtils";
 import type { Reservation } from "@/types";
 
 type Tab = "activas" | "historial";
@@ -35,8 +36,9 @@ export function MyReservationsPage() {
     [reservations, session?.studentId],
   );
 
-  const actives = mine.filter((r) => r.status === "Activa");
-  const history = mine.filter((r) => r.status !== "Activa");
+  // El estado real: una "Activa" cuya franja ya venció se muestra como "Vencida".
+  const actives = mine.filter((r) => effectiveStatus(r) === "Activa");
+  const history = mine.filter((r) => effectiveStatus(r) !== "Activa");
 
   const handleCancel = async () => {
     if (!cancelTarget) return;
@@ -103,8 +105,8 @@ export function MyReservationsPage() {
                 <h3 className="text-xl font-bold text-primary">
                   {res.mealName}
                 </h3>
-                <Badge variant={statusBadgeVariant(res.status)} dot>
-                  {res.status}
+                <Badge variant={statusBadgeVariant(effectiveStatus(res))} dot>
+                  {effectiveStatus(res)}
                 </Badge>
               </div>
 
@@ -136,7 +138,7 @@ export function MyReservationsPage() {
                 >
                   Ver QR
                 </Button>
-                {res.status === "Activa" && (
+                {effectiveStatus(res) === "Activa" && (
                   <Button
                     variant="danger"
                     size="sm"

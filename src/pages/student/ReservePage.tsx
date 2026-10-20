@@ -19,9 +19,19 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmModal, InfoRow } from "@/components/ui/Modal";
 import { formatShort, todayISO } from "@/utils/dates";
-import { availableForType } from "@/utils/reservationUtils";
+import {
+  availableForType,
+  buildSlots,
+  effectiveStatus,
+  slotOccupancy,
+} from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
-import type { Meal, ReservationStatus, StudentType } from "@/types";
+import type {
+  Meal,
+  Reservation,
+  ReservationStatus,
+  StudentType,
+} from "@/types";
 
 export function ReservePage() {
   const { currentStudent, meals, reservations, settings, reserve, getMealStats } =
@@ -29,14 +39,31 @@ export function ReservePage() {
   const { push } = useToast();
 
   const [confirmMeal, setConfirmMeal] = useState<Meal | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const today = todayISO();
+
+  const openConfirm = (meal: Meal) => {
+    const slots = buildSlots(meal);
+    const occupancy = slotOccupancy(meal, reservations, today);
+    // Por defecto se preselecciona la primera franja que todavía tiene espacio.
+    const firstFree = slots.find(
+      (s) => (occupancy[s.start] ?? 0) < s.limit,
+    );
+    setSelectedSlot(firstFree?.start ?? null);
+    setConfirmMeal(meal);
+  };
+
+  const closeConfirm = () => {
+    setConfirmMeal(null);
+    setSelectedSlot(null);
+  };
 
   const handleConfirm = async () => {
     if (!confirmMeal) return;
-    const result = await reserve(confirmMeal.id);
+    const result = await reserve(confirmMeal.id, selectedSlot ?? undefined);
     if (result.ok) push("success", result.message);
     else push("error", result.message);
-    setConfirmMeal(null);
+    closeConfirm();
   };
 
   if (!currentStudent) {
@@ -88,9 +115,11 @@ export function ReservePage() {
               stats={stats}
               remaining={availableForType(stats, currentStudent.tipo)}
               tipoEstudiante={currentStudent.tipo}
-              myStatus={myReservation?.status ?? null}
+              myStatus={
+                myReservation ? effectiveStatus(myReservation) : null
+              }
               reservationsOpen={reservationsOpen && meal.habilitado}
-              onReserve={() => setConfirmMeal(meal)}
+              onReserve={() => openConfirm(meal)}
             />
           );
         })}
@@ -107,26 +136,110 @@ export function ReservePage() {
 
       <ConfirmModal
         open={confirmMeal !== null}
-        onClose={() => setConfirmMeal(null)}
+        onClose={closeConfirm}
         onConfirm={handleConfirm}
         title="Confirmar reserva"
-        question="¿Deseas confirmar esta reserva?"
+        question="Elige la hora en que pasarás por tu comida"
         confirmLabel="Confirmar reserva"
         tone="primary"
       >
         {confirmMeal && confirmStats && (
-          <div className="rounded-xl bg-surface/70 px-3 py-2 ring-1 ring-line">
-            <InfoRow label="Servicio" value={confirmMeal.nombre} />
-            <InfoRow label="Fecha" value={formatShort(today)} />
-            <InfoRow label="Horario" value={confirmMeal.horario} />
-            <InfoRow label="Tipo de estudiante" value={currentStudent.tipo} />
-            <InfoRow
-              label="Cupos disponibles"
-              value={`${availableForType(confirmStats, currentStudent.tipo)} para tu tipo`}
+          <div className="space-y-4">
+            <div className="rounded-xl bg-surface/70 px-3 py-2 ring-1 ring-line">
+              <InfoRow label="Servicio" value={confirmMeal.nombre} />
+              <InfoRow label="Fecha" value={formatShort(today)} />
+              <InfoRow label="Tipo de estudiante" value={currentStudent.tipo} />
+              <InfoRow
+                label="Cupos disponibles"
+                value={`${availableForType(confirmStats, currentStudent.tipo)} para tu tipo`}
+              />
+            </div>
+
+            <SlotPicker
+              meal={confirmMeal}
+              reservations={reservations}
+              date={today}
+              selected={selectedSlot}
+              onSelect={setSelectedSlot}
             />
           </div>
         )}
       </ConfirmModal>
+    </div>
+  );
+}
+
+/* -----------------------------------------------------------
+   Selector de franja de 30 minutos
+   ----------------------------------------------------------- */
+
+interface SlotPickerProps {
+  meal: Meal;
+  reservations: Reservation[];
+  date: string;
+  selected: string | null;
+  onSelect: (slot: string) => void;
+}
+
+function SlotPicker({
+  meal,
+  reservations,
+  date,
+  selected,
+  onSelect,
+}: SlotPickerProps) {
+  const slots = buildSlots(meal);
+  const occupancy = slotOccupancy(meal, reservations, date);
+
+  return (
+    <div>
+      <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <Clock size={15} className="text-secondary" />
+        Franja de llegada (cada 30 minutos)
+      </p>
+
+      <div className="grid grid-cols-3 gap-2">
+        {slots.map((slot) => {
+          const used = occupancy[slot.start] ?? 0;
+          const free = Math.max(slot.limit - used, 0);
+          const full = free <= 0;
+          const isSelected = selected === slot.start;
+
+          return (
+            <button
+              key={slot.start}
+              type="button"
+              disabled={full}
+              onClick={() => onSelect(slot.start)}
+              aria-pressed={isSelected}
+              className={`rounded-xl border px-2 py-2 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                isSelected
+                  ? "border-primary bg-primary text-white"
+                  : full
+                    ? "cursor-not-allowed border-line bg-surface text-muted opacity-60"
+                    : "border-line bg-white text-ink hover:border-primary"
+              }`}
+            >
+              <span className="block text-sm font-bold">
+                {slot.start}–{slot.end}
+              </span>
+              <span
+                className={`block text-xs ${
+                  isSelected ? "text-white/85" : "text-muted"
+                }`}
+              >
+                {full ? "Llena" : `${free} cupos`}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-2 text-xs leading-relaxed text-muted">
+        Tienes <strong>30 minutos</strong> desde el inicio de tu franja para
+        presentarte. Si no llegas, el cupo se libera automáticamente para otro
+        estudiante.
+      </p>
     </div>
   );
 }
@@ -157,7 +270,9 @@ function MealCard({
   reservationsOpen,
   onReserve,
 }: MealCardProps) {
-  const reservedByMe = myStatus !== null;
+  // Una reserva vencida ya no bloquea al estudiante: puede reservar otra vez.
+  const reservedByMe = myStatus === "Activa" || myStatus === "Utilizada";
+  const expired = myStatus === "Vencida";
   const soldOut = remaining <= 0 && !reservedByMe;
 
   return (
@@ -179,6 +294,10 @@ function MealCard({
         {reservedByMe ? (
           <Badge variant={myStatus === "Activa" ? "success" : "info"} dot>
             {myStatus === "Activa" ? "Reservado" : "Utilizado"}
+          </Badge>
+        ) : expired ? (
+          <Badge variant="warning" dot>
+            Vencida
           </Badge>
         ) : !reservationsOpen ? (
           <Badge variant="warning">Cerrado</Badge>
@@ -266,6 +385,10 @@ function MealCard({
         ) : myStatus === "Utilizada" ? (
           <Button fullWidth variant="outline" disabled icon={<CheckCircle2 size={16} />}>
             Reserva ya utilizada
+          </Button>
+        ) : expired ? (
+          <Button fullWidth onClick={onReserve} variant="outline" icon={<CalendarDays size={16} />}>
+            Reservar de nuevo
           </Button>
         ) : soldOut ? (
           <Button fullWidth disabled icon={<Lock size={16} />}>

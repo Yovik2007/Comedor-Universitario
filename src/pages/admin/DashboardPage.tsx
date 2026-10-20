@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowRight,
   CalendarDays,
   CheckCircle2,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatShort, todayISO } from "@/utils/dates";
+import { effectiveStatus, occupiesSlot } from "@/utils/reservationUtils";
 
 export function DashboardPage() {
   const { students, reservations, meals, settings, getMealStats } = useApp();
@@ -28,14 +30,19 @@ export function DashboardPage() {
   );
 
   const counts = useMemo(() => {
-    const activas = todayReservations.filter((r) => r.status === "Activa").length;
+    const activas = todayReservations.filter(
+      (r) => effectiveStatus(r) === "Activa",
+    ).length;
     const utilizadas = todayReservations.filter(
       (r) => r.status === "Utilizada",
     ).length;
     const canceladas = todayReservations.filter(
       (r) => r.status === "Cancelada",
     ).length;
-    return { activas, utilizadas, canceladas };
+    const vencidas = todayReservations.filter(
+      (r) => effectiveStatus(r) === "Vencida",
+    ).length;
+    return { activas, utilizadas, canceladas, vencidas };
   }, [todayReservations]);
 
   const availableCups = useMemo(
@@ -51,7 +58,7 @@ export function DashboardPage() {
       meals.map((meal) => ({
         meal,
         count: todayReservations.filter(
-          (r) => r.mealId === meal.id && r.status !== "Cancelada",
+          (r) => r.mealId === meal.id && occupiesSlot(effectiveStatus(r)),
         ).length,
         stats: getMealStats(meal.id),
       })),
@@ -59,7 +66,9 @@ export function DashboardPage() {
   );
 
   const byType = useMemo(() => {
-    const valid = todayReservations.filter((r) => r.status !== "Cancelada");
+    const valid = todayReservations.filter((r) =>
+      occupiesSlot(effectiveStatus(r)),
+    );
     return {
       becarios: valid.filter((r) => r.studentType === "Becario").length,
       libres: valid.filter((r) => r.studentType === "Libre").length,
@@ -138,6 +147,13 @@ export function DashboardPage() {
           value={availableCups}
           hint="En servicios habilitados"
           tone="warning"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Reservas vencidas"
+          value={counts.vencidas}
+          hint="Su cupo pasó a estar libre"
+          tone="accent"
         />
       </div>
 

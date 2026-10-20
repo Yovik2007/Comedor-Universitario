@@ -77,6 +77,12 @@ export function timeToMinutes(hhmm: string): number {
   return (hours ?? 0) * 60 + (minutes ?? 0);
 }
 
+/** Convierte minutos desde medianoche a una hora "HH:MM". */
+export function minutesToTime(total: number): string {
+  const safe = Math.max(0, Math.min(total, 24 * 60 - 1));
+  return `${pad(Math.floor(safe / 60))}:${pad(safe % 60)}`;
+}
+
 /** Minutos desde medianoche de la hora actual. */
 export function currentMinutes(): number {
   const now = new Date();

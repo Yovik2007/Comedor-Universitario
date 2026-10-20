@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ReservationStatus } from "@/types";
 
 export type BadgeVariant =
   | "success"
@@ -41,10 +42,9 @@ export function Badge({
 }
 
 /** Variante de badge según el estado de una reserva. */
-export function statusBadgeVariant(
-  status: "Activa" | "Utilizada" | "Cancelada",
-): BadgeVariant {
+export function statusBadgeVariant(status: ReservationStatus): BadgeVariant {
   if (status === "Activa") return "success";
   if (status === "Utilizada") return "info";
+  if (status === "Vencida") return "warning";
   return "danger";
 }

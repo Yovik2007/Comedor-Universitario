@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { inputCls } from "@/components/ui/Field";
 import { InfoRow, Modal } from "@/components/ui/Modal";
 import { formatLong, formatShort } from "@/utils/dates";
+import { effectiveStatus } from "@/utils/reservationUtils";
 import { formatClock } from "@/utils/text";
 import type { Reservation } from "@/types";
 
@@ -37,7 +38,8 @@ export function ReservationsPage() {
           return false;
         }
         if (mealFilter !== "todos" && r.mealId !== mealFilter) return false;
-        if (statusFilter !== "todas" && r.status !== statusFilter) return false;
+        if (statusFilter !== "todas" && effectiveStatus(r) !== statusFilter)
+          return false;
         if (typeFilter !== "todos" && r.studentType !== typeFilter) return false;
         if (dateFilter && r.date !== dateFilter) return false;
         return true;
@@ -125,6 +127,7 @@ export function ReservationsPage() {
             <option value="todas">Todos los estados</option>
             <option value="Activa">Activa</option>
             <option value="Utilizada">Utilizada</option>
+            <option value="Vencida">Vencida</option>
             <option value="Cancelada">Cancelada</option>
           </select>
 
@@ -199,8 +202,8 @@ export function ReservationsPage() {
                     <td className="px-5 py-3.5 text-muted">{r.mealName}</td>
                     <td className="px-5 py-3.5 text-muted">{formatShort(r.date)}</td>
                     <td className="px-5 py-3.5">
-                      <Badge variant={statusBadgeVariant(r.status)} dot>
-                        {r.status}
+                      <Badge variant={statusBadgeVariant(effectiveStatus(r))} dot>
+                        {effectiveStatus(r)}
                       </Badge>
                     </td>
                     <td className="px-5 py-3.5">
@@ -212,7 +215,7 @@ export function ReservationsPage() {
                         >
                           Ver
                         </Button>
-                        {r.status === "Activa" && (
+                        {effectiveStatus(r) === "Activa" && (
                           <Button
                             variant="success"
                             size="sm"
@@ -239,7 +242,7 @@ export function ReservationsPage() {
         title="Detalle de la reserva"
         size="sm"
         footer={
-          detail?.status === "Activa" ? (
+          detail && effectiveStatus(detail) === "Activa" ? (
             <>
               <Button variant="outline" onClick={() => setDetailId(null)}>
                 Cerrar
@@ -275,11 +278,17 @@ export function ReservationsPage() {
               <InfoRow
                 label="Estado"
                 value={
-                  <Badge variant={statusBadgeVariant(detail.status)} dot>
-                    {detail.status}
+                  <Badge
+                    variant={statusBadgeVariant(effectiveStatus(detail))}
+                    dot
+                  >
+                    {effectiveStatus(detail)}
                   </Badge>
                 }
               />
+              {detail.slotStart && (
+                <InfoRow label="Franja" value={`${detail.time}`} />
+              )}
               {detail.usedAt && (
                 <InfoRow label="Validada a las" value={formatClock(detail.usedAt)} />
               )}

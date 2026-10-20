@@ -6,10 +6,111 @@
 import type {
   Meal,
   Reservation,
+  ReservationStatus,
   StudentType,
   ValidationOutcome,
 } from "@/types";
-import { timeToMinutes } from "@/utils/dates";
+import { minutesToTime, timeToMinutes } from "@/utils/dates";
+
+/* ---------------------------------------------------------------------------
+   Franjas de 30 minutos y ventana de gracia
+   --------------------------------------------------------------------------- */
+
+/** Duración de cada franja de llegada. */
+export const SLOT_MINUTES = 30;
+
+/**
+ * Minutos que el estudiante tiene, desde el inicio de su franja, para
+ * presentarse. Pasado ese plazo la reserva pasa a `Vencida` y su cupo se
+ * libera automáticamente.
+ */
+export const GRACE_MINUTES = 30;
+
+/** Una franja de llegada: de 12:00 a 12:30, por ejemplo. */
+export interface MealSlot {
+  /** Inicio "12:00" */
+  start: string;
+  /** Fin "12:30" */
+  end: string;
+  /** Etiqueta legible "12:00 – 12:30" */
+  label: string;
+  /** Cupos que caben en esta franja (reparto equitativo del total). */
+  limit: number;
+}
+
+/**
+ * Divide el horario de un servicio en franjas de 30 minutos.
+ * El almuerzo (12:00–14:30) produce 5 franjas.
+ */
+export function buildSlots(meal: Meal): MealSlot[] {
+  const from = timeToMinutes(meal.inicio);
+  const to = timeToMinutes(meal.fin);
+  if (to <= from || meal.total <= 0) return [];
+
+  const starts: number[] = [];
+  for (let m = from; m < to; m += SLOT_MINUTES) starts.push(m);
+
+  const limit = Math.ceil(meal.total / starts.length);
+
+  return starts.map((m) => {
+    const end = Math.min(m + SLOT_MINUTES, to);
+    return {
+      start: minutesToTime(m),
+      end: minutesToTime(end),
+      label: `${minutesToTime(m)} – ${minutesToTime(end)}`,
+      limit,
+    };
+  });
+}
+
+/** Franja que le corresponde a una reserva (o la primera del servicio). */
+export function slotOf(reservation: Reservation, meal: Meal): string {
+  return reservation.slotStart ?? meal.inicio;
+}
+
+/** Hora límite de presentación: inicio de la franja + ventana de gracia. */
+export function expiresAtISO(date: string, slotStart: string): string {
+  const d = new Date(`${date}T${slotStart}:00`);
+  d.setMinutes(d.getMinutes() + GRACE_MINUTES);
+  return d.toISOString();
+}
+
+/** true si la reserva ya superó su ventana de gracia. */
+export function isExpired(reservation: Reservation, now = new Date()): boolean {
+  if (!reservation.expiresAt) return false;
+  if (reservation.status !== "Activa") return false;
+  return new Date(reservation.expiresAt).getTime() < now.getTime();
+}
+
+/**
+ * Estado real de la reserva. Una `Activa` cuya franja ya venció se comporta
+ * como `Vencida` sin necesidad de escribir en la base de datos.
+ */
+export function effectiveStatus(
+  reservation: Reservation,
+  now = new Date(),
+): ReservationStatus {
+  return isExpired(reservation, now) ? "Vencida" : reservation.status;
+}
+
+/** Ocupación por franja: cuántas reservas ya hay en cada tramo de 30 min. */
+export function slotOccupancy(
+  meal: Meal,
+  reservations: Reservation[],
+  date: string,
+  now = new Date(),
+): Record<string, number> {
+  const bySlot: Record<string, number> = {};
+  for (const slot of buildSlots(meal)) bySlot[slot.start] = 0;
+
+  for (const r of reservations) {
+    if (r.mealId !== meal.id || r.date !== date) continue;
+    if (!occupiesSlot(effectiveStatus(r, now))) continue;
+    const key = r.slotStart ?? meal.inicio;
+    if (key in bySlot) bySlot[key] += 1;
+  }
+  return bySlot;
+}
 
 /** Estados que ocupan un cupo (una reserva cancelada libera su cupo). */
 export function occupiesSlot(status: Reservation["status"]): boolean {
@@ -32,16 +133,35 @@ export interface MealStats {
   dispLibres: number;
   dispTotal: number;
   percentOcupado: number;
+  /** Cupos de becarios que vencieron y pasaron automáticamente a libres. */
+  becariosLiberados: number;
+  /** Reservas que ya cumplieron su ventana de gracia (becarios y libres). */
+  vencidas: number;
 }
 
-/** Calcula los cupos de un servicio en una fecha dada, a partir de las reservas. */
+/**
+ * Calcula los cupos de un servicio en una fecha dada.
+ *
+ * Reglas:
+ *  - Solo `Activa` y `Utilizada` consumen cupo.
+ *  - Una `Activa` cuya franja + ventana de gracia ya pasó cuenta como `Vencida`.
+ *  - El cupo de un becario vencido **pasa a los estudiantes libres**: así ninguna
+ *    ración se desperdicia cuando alguien reservó y no se presentó.
+ */
 export function computeMealStats(
   meal: Meal,
   reservations: Reservation[],
   date: string,
+  now: Date = new Date(),
 ): MealStats {
-  const occupied = reservations.filter(
-    (r) => r.mealId === meal.id && r.date === date && occupiesSlot(r.status),
+  const dayReservations = reservations.filter(
+    (r) => r.mealId === meal.id && r.date === date,
+  );
+
+  const statuses = dayReservations.map((r) => effectiveStatus(r, now));
+
+  const occupied = dayReservations.filter((_, i) =>
+    occupiesSlot(statuses[i]),
   );
 
   const resBecarios = occupied.filter(
@@ -49,8 +169,20 @@ export function computeMealStats(
   ).length;
   const resLibres = occupied.length - resBecarios;
 
+  // Cupos de becario que vencieron: se transfieren a los libres.
+  const becariosLiberados = dayReservations.filter(
+    (r, i) => r.studentType === "Becario" && statuses[i] === "Vencida",
+  ).length;
+  const vencidas = statuses.filter((s) => s === "Vencida").length;
+
   const becariosQuota = meal.becarios;
   const libresQuota = freeQuota(meal);
+
+  const dispBecarios = Math.max(
+    becariosQuota - resBecarios - becariosLiberados,
+    0,
+  );
+  const dispLibres = Math.max(libresQuota - resLibres + becariosLiberados, 0);
 
   return {
     becariosQuota,
@@ -59,13 +191,15 @@ export function computeMealStats(
     resBecarios,
     resLibres,
     resTotal: occupied.length,
-    dispBecarios: Math.max(becariosQuota - resBecarios, 0),
-    dispLibres: Math.max(libresQuota - resLibres, 0),
-    dispTotal: Math.max(meal.total - occupied.length, 0),
+    dispBecarios,
+    dispLibres,
+    dispTotal: dispBecarios + dispLibres,
     percentOcupado:
       meal.total > 0
         ? Math.min(100, Math.round((occupied.length / meal.total) * 100))
         : 0,
+    becariosLiberados,
+    vencidas,
   };
 }
 
@@ -108,6 +242,7 @@ export function buildQrPayload(reservation: Reservation): string {
 export function validateReservationCode(
   code: string,
   reservations: Reservation[],
+  now: Date = new Date(),
 ): ValidationOutcome {
   const normalized = code.trim().toUpperCase();
 
@@ -135,6 +270,16 @@ export function validateReservationCode(
     return {
       kind: "canceled",
       message: "Reserva cancelada. El estudiante ya no tiene acceso.",
+      reservation,
+    };
+  }
+
+  // La reserva puede seguir en estado "Activa" en la base, pero su franja
+  // y ventana de gracia ya pasaron: se comporta como vencida.
+  if (effectiveStatus(reservation, now) === "Vencida") {
+    return {
+      kind: "expired",
+      message: `Reserva vencida. La franja de ${reservation.slotStart ?? "inicio"} ya pasó y el cupo fue liberado.`,
       reservation,
     };
   }

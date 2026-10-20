@@ -35,7 +35,7 @@
 -- =====================================================================
 
 create type student_type   as enum ('Becario', 'Libre');
-create type reservation_status as enum ('Activa', 'Utilizada', 'Cancelada');
+create type reservation_status as enum ('Activa', 'Utilizada', 'Cancelada', 'Vencida');
 create type user_role      as enum ('estudiante', 'admin');
 
 
@@ -98,6 +98,8 @@ create table settings (
 );
 
 -- Reservas de comida
+-- · slot_start: franja de 30 min elegida ("12:00")
+-- · expires_at: franja + 30 min de ventana de gracia (si pasa → 'Vencida')
 create table reservations (
   id          text primary key
               default ('RES-' || lpad(nextval('reservation_seq')::text, 5, '0')),
@@ -106,6 +108,8 @@ create table reservations (
   fecha       date not null default current_date,
   status      reservation_status not null default 'Activa',
   qr_code     text not null check (length(trim(qr_code)) > 0),
+  slot_start  time,
+  expires_at  timestamptz,
   created_at  timestamptz not null default now(),
   used_at     timestamptz
 );
@@ -237,9 +241,18 @@ select r.id,
        r.meal_id                          as "mealId",
        m.nombre                           as "mealName",
        r.fecha                            as "date",
-       m.horario                          as "time",
+       case
+         when r.slot_start is not null
+           then to_char(r.slot_start, 'HH24:MI') || ' – ' ||
+                to_char(r.slot_start + interval '30 minutes', 'HH24:MI')
+         else m.horario
+       end                                as "time",
        r.status::text                     as "status",
        r.qr_code                          as "qrCode",
+       case when r.slot_start is null then null
+            else to_char(r.slot_start, 'HH24:MI')
+       end                                as "slotStart",
+       r.expires_at                       as "expiresAt",
        r.created_at                       as "createdAt",
        r.used_at                          as "usedAt"
 from reservations r
@@ -309,6 +322,10 @@ group by o.survey_id, o.id, o.label, t.n;
 -- Solo contiene cupos y conteos, así que se ejecuta como propietario
 -- (security_invoker = false): un estudiante ve los cupos disponibles
 -- aunque RLS le oculte las reservas de los demás.
+-- Cupos por servicio y fecha.
+-- · Estado efectivo: una 'Activa' con expires_at vencido cuenta como 'Vencida'.
+-- · Solo Activa y Utilizada consumen cupo.
+-- · El cupo de un becario vencido se transfiere a los estudiantes libres.
 create or replace view vw_meal_stats
 with (security_invoker = false) as
 with fechas as (
@@ -316,17 +333,41 @@ with fechas as (
   union
   select current_date
 ),
+efectivo as (
+  select r.id,
+         r.meal_id,
+         r.fecha,
+         case
+           when r.status = 'Activa'
+            and r.expires_at is not null
+            and r.expires_at < now()
+             then 'Vencida'
+           else r.status::text
+         end as estado
+  from reservations r
+),
 base as (
   select m.id     as meal_id,
          f.fecha,
          m.total,
          m.becarios,
-         count(r.id) filter (where r.status <> 'Cancelada' and s.tipo = 'Becario')::int as res_becarios,
-         count(r.id) filter (where r.status <> 'Cancelada' and s.tipo = 'Libre')::int   as res_libres
+         count(r.id) filter (
+           where e.estado in ('Activa', 'Utilizada') and s.tipo = 'Becario'
+         )::int as res_becarios,
+         count(r.id) filter (
+           where e.estado in ('Activa', 'Utilizada') and s.tipo = 'Libre'
+         )::int as res_libres,
+         count(r.id) filter (
+           where e.estado = 'Vencida' and s.tipo = 'Becario'
+         )::int as becarios_liberados,
+         count(r.id) filter (
+           where e.estado = 'Vencida'
+         )::int as vencidas
   from meals m
   cross join fechas f
-  left join reservations r on r.meal_id = m.id and r.fecha = f.fecha
-  left join students    s on s.id       = r.student_id
+  left join efectivo     e on e.meal_id = m.id and e.fecha = f.fecha
+  left join reservations r on r.id = e.id
+  left join students     s on s.id = r.student_id
   group by m.id, f.fecha, m.total, m.becarios
 )
 select meal_id::text                 as "mealId",
@@ -336,12 +377,18 @@ select meal_id::text                 as "mealId",
        res_becarios                  as "resBecarios",
        res_libres                    as "resLibres",
        (res_becarios + res_libres)   as "resTotal",
-       (becarios - res_becarios)     as "dispBecarios",
-       (total - becarios - res_libres) as "dispLibres",
-       (total - res_becarios - res_libres) as "dispTotal",
+       greatest(becarios - res_becarios - becarios_liberados, 0)
+                                     as "dispBecarios",
+       greatest(total - becarios - res_libres + becarios_liberados, 0)
+                                     as "dispLibres",
+       (greatest(becarios - res_becarios - becarios_liberados, 0) +
+        greatest(total - becarios - res_libres + becarios_liberados, 0))
+                                     as "dispTotal",
        case when total = 0 then 0
-            else round((res_becarios + res_libres) * 100.0 / total, 1)
-       end                           as "percentOcupado"
+            else least(round((res_becarios + res_libres) * 100.0 / total, 1), 100)
+       end                           as "percentOcupado",
+       becarios_liberados            as "becariosLiberados",
+       vencidas                      as "vencidas"
 from base;
 
 
@@ -685,10 +732,12 @@ insert into app_users (email, role, nombre, student_id, tipo) values
   ('camila@demo.com',       'estudiante', 'Camila Ortiz',             'EST010', 'Becario');
 
 -- 8.3 Servicios y configuración ---------------------------------------
+-- Cupos reales de la institución (5,500 raciones/día) y 54.55 % reservado
+-- para becarios: 1000 x 0.5455 = 546 | 3000 x 0.5455 = 1637 | 1500 x 0.5455 = 818
 insert into meals (id, nombre, horario, inicio, fin, total, becarios, habilitado) values
-  ('desayuno', 'Desayuno', '7:00 AM - 9:00 AM',    '07:00', '09:00',  50, 30, true),
-  ('almuerzo', 'Almuerzo', '12:00 PM - 2:30 PM',   '12:00', '14:30', 120, 70, true),
-  ('cena',     'Cena',     '6:00 PM - 8:00 PM',    '18:00', '20:00',  80, 45, true);
+  ('desayuno', 'Desayuno', '7:00 AM - 9:00 AM',    '07:00', '09:00', 1000,  546, true),
+  ('almuerzo', 'Almuerzo', '12:00 PM - 2:30 PM',   '12:00', '14:30', 3000, 1637, true),
+  ('cena',     'Cena',     '6:00 PM - 8:00 PM',    '18:00', '20:00', 1500,  818, true);
 
 insert into settings (id, reservas_habilitadas) values (true, true);
 

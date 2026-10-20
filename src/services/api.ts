@@ -173,6 +173,8 @@ interface ReservationRow {
   time: string;
   status: string;
   qrCode: string;
+  slotStart: string | null;
+  expiresAt: string | null;
   createdAt: string;
   usedAt: string | null;
 }
@@ -224,6 +226,8 @@ const toReservation = (r: ReservationRow): Reservation => ({
   time: r.time,
   status: r.status as ReservationStatus,
   qrCode: r.qrCode,
+  slotStart: r.slotStart ?? undefined,
+  expiresAt: r.expiresAt ?? undefined,
   createdAt: r.createdAt,
   usedAt: r.usedAt ?? undefined,
 });
@@ -528,6 +532,8 @@ export async function insertReservation(r: Reservation): Promise<void> {
       fecha: r.date,
       status: r.status,
       qr_code: r.qrCode,
+      slot_start: r.slotStart ?? null,
+      expires_at: r.expiresAt ?? null,
       created_at: r.createdAt,
       used_at: r.usedAt ?? null,
     }),

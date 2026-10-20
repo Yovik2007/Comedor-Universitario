@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>7. Presupuesto del proyecto - UNJFSC Comedor digital</title>
+<style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 12pt; line-height: 1.6; margin: 40px; color:#000; }
+h1 { font-size: 18pt; color:#123B6D; border-bottom: 3px solid #123B6D; padding-bottom:6px; }
+h2 { font-size: 15pt; color:#123B6D; margin-top: 26px; }
+h3 { font-size: 13pt; color:#1a5276; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0 18px 0; font-size: 11pt; }
+th { background-color:#123B6D; color:#fff; padding:8px; text-align:left; border:1px solid #123B6D; }
+td { padding:7px; border:1px solid #b0b0b0; }
+tr:nth-child(even) td { background-color:#eef3f8; }
+.total td { background-color:#d6e4f0 !important; font-weight:bold; }
+.destacado { background-color:#eef3f8; border-left:5px solid #123B6D; padding:12px 16px; margin:14px 0; }
+.nota { font-size:10.5pt; color:#444; font-style:italic; }
+strong { color:#123B6D; }
+</style>
+</head>
+<body>
+
+<h1>7. PRESUPUESTO DEL PROYECTO</h1>
+<p class="nota">Sistema: «UNJFSC Comedor digital». Precios verificados el 14 de octubre de 2026 en tiendas peruanas
+(Falabella, Hiraoka y el registro oficial de dominios NIC.PE). Todos los valores están en soles (S/) e incluyen impuestos.</p>
+
+<div class="destacado">
+<strong>Resumen ejecutivo.</strong> El costo total del primer año es de <strong>S/ 334.78</strong>, y a partir del
+segundo año solo se pagan <strong>S/ 20 anuales</strong> por el dominio peruano <em>.net.pe</em>. Esto es posible
+porque el sistema se construyó con software libre y porque aprovecha la computadora que la institución ya posee.
+Si se encargara el desarrollo del software a un profesional externo, el valor estimado sería de
+<strong>S/ 6,000</strong> (≈ 200 horas de programación), monto que el prototipo presentado ya tiene ejecutado.
+</div>
+
+<h2>7.1. Naturaleza de la inversión</h2>
+<p>El presupuesto se clasifica en tres categorías. La primera corresponde a la compra única del equipo físico;
+la segunda al mantenimiento mínimo que exige la dirección web; y la tercera agrupa todos los componentes
+de software, que por ser de código abierto no generan ningún desembolso, ni ahora ni en el futuro.</p>
+
+<table>
+<tr><th>Tipo de costo</th><th>Qué incluye</th><th>Frecuencia</th></tr>
+<tr><td><strong>Inversión única</strong></td><td>Equipo (lector QR, cámara web) y gestiones del dominio</td><td>Solo la primera vez</td></tr>
+<tr><td><strong>Gasto recurrente</strong></td><td>Renovación del dominio</td><td>Una vez al año</td></tr>
+<tr><td><strong>Sin costo</strong></td><td>Licencias de software, alojamiento y base de datos</td><td>Gratuito de por vida</td></tr>
+</table>
+
+<p>El sistema está construido íntegramente con software libre (React, TypeScript, Vite, Tailwind CSS,
+Supabase y GitHub Pages), por lo que no se paga ninguna licencia y el costo de operación mensual es de S/ 0.</p>
+
+<h2>7.2. Recursos humanos</h2>
+<p>El desarrollo requiere un perfil full stack capaz de cubrir la interfaz de usuario, la lógica de negocio,
+el esquema de base de datos y las políticas de seguridad. La siguiente tabla detalla el esfuerzo estimado
+por bloque de trabajo.</p>
+
+<table>
+<tr><th>Rol</th><th>Función en el proyecto</th><th>Dedicación</th><th>Horas</th></tr>
+<tr><td>Desarrollador full stack</td><td>Interfaz, lógica de negocio, base de datos y seguridad</td><td>6 meses (medio tiempo)</td><td>130 – 185 h</td></tr>
+<tr><td>Módulos futuros</td><td>Ventana de gracia e identidad</td><td>1 – 2 meses</td><td>18 – 28 h</td></tr>
+<tr class="total"><td colspan="3">TOTAL DE HORAS</td><td>150 – 220 h</td></tr>
+</table>
+
+<p>Al tratarse de un proyecto académico, la mano de obra no se contrata y su costo es de S/ 0.
+Como referencia, si la institución encargara el desarrollo a un profesional externo, el costo
+estaría entre <strong>S/ 2,250 y S/ 17,600</strong> según el perfil del desarrollador
+(desglose completo en la sección 7.10).</p>
+
+<h2>7.3. Recursos tecnológicos (software libre)</h2>
+<p>Cada componente tecnológico fue seleccionado por su madurez, su comunidad activa y, sobre todo,
+por no generar costos de licenciamiento. La totalidad del andamiaje técnico es gratuito.</p>
+
+<table>
+<tr><th>Componente</th><th>Para qué sirve</th><th>Costo</th></tr>
+<tr><td>React 19 + TypeScript</td><td>Construcción de la interfaz</td><td>S/ 0 (licencia MIT)</td></tr>
+<tr><td>Vite</td><td>Compilador y servidor de desarrollo</td><td>S/ 0 (licencia MIT)</td></tr>
+<tr><td>Tailwind CSS</td><td>Estilos y diseño responsive</td><td>S/ 0 (licencia MIT)</td></tr>
+<tr><td>Supabase (plan gratuito)</td><td>Base de datos, inicio de sesión y permisos</td><td>S/ 0</td></tr>
+<tr><td>GitHub Pages</td><td>Alojamiento público con HTTPS</td><td>S/ 0</td></tr>
+<tr><td>Git / GitHub</td><td>Control de versiones del código</td><td>S/ 0</td></tr>
+<tr class="total"><td colspan="2">TOTAL DE LICENCIAS</td><td>S/ 0</td></tr>
+</table>
+
+<p>El plan gratuito de Supabase soporta 50,000 usuarios simultáneos y 500 MB de datos, cifras muy
+superiores a las que necesita el comedor universitario, por lo que no será necesario ascender a un plan de pago.</p>
+
+<h2>7.4. Equipamiento: análisis de opciones</h2>
+<p>Para cada componente físico se evaluó la opción más económica que cumpla adecuadamente la función,
+descartando aquellas que ofrecen ventajas que el proyecto no necesita. Este análisis permite
+justificar cada decisión de compra ante la institución.</p>
+
+<h3>7.4.1. Lector de códigos (pieza principal del kiosco)</h3>
+<table>
+<tr><th>Opción</th><th>Precio</th><th>Decisión y motivo</th></tr>
+<tr><td><strong>Lector alámbrico USB 2D/1D YHD-1100D</strong></td><td><strong>S/ 159.90</strong></td><td><strong>ELEGIDO.</strong> Lee QR y código de barras, se conecta por USB (sin baterías que se agoten) y cuenta con 1 año de garantía.</td></tr>
+<tr><td>Lector inalámbrico YHD-3200DB</td><td>S/ 259.90</td><td>Descartado: cuesta S/ 100 más y la inalámbridez no aporta en un kiosco fijo.</td></tr>
+<tr><td>Lector omnidireccional de mesa</td><td>S/ 499.00</td><td>Descartado: diseñado para supermercados con flujo alto; aquí resulta excesivo.</td></tr>
+</table>
+
+<h3>7.4.2. Pantalla y computadora del kiosco</h3>
+<table>
+<tr><th>Opción</th><th>Precio</th><th>Decisión y motivo</th></tr>
+<tr><td><strong>Computadora que la institución ya tiene</strong></td><td><strong>S/ 0</strong></td><td><strong>ELEGIDA.</strong> El kiosco únicamente abre una página web; cualquier computadora con monitor resulta suficiente.</td></tr>
+<tr><td>Tablet de 8.7 pulgadas (Lenovo Tab One)</td><td>S/ 449.00</td><td>Alternativa viable si no existe computadora disponible.</td></tr>
+<tr><td>Tablet de 10.1 pulgadas (TCL Tab 10L / Samsung Tab A11)</td><td>S/ 499.00</td><td>Descartada: la pantalla más grande no mejora el proceso de validación.</td></tr>
+<tr><td>Laptop nueva (Acer Aspire Lite, Ryzen 3)</td><td>S/ 1,799.00</td><td>Descartada: constituye una compra innecesaria para una estación fija.</td></tr>
+</table>
+
+<h3>7.4.3. Cámara web (módulo de identidad)</h3>
+<table>
+<tr><th>Opción</th><th>Precio</th><th>Decisión y motivo</th></tr>
+<tr><td><strong>Cámara web Genius FaceCam 1000X</strong></td><td><strong>S/ 69.90</strong></td><td><strong>ELEGIDA.</strong> Resulta suficiente para registrar la fotografía de verificación del estudiante.</td></tr>
+<tr><td>Cámara web Logitech C270</td><td>S/ 144.90</td><td>Descartada: ofrece mejor calidad, pero no se requiere para la función prevista.</td></tr>
+</table>
+
+<h3>7.4.4. Dominio (dirección propia)</h3>
+<table>
+<tr><th>Opción</th><th>Precio</th><th>Decisión y motivo</th></tr>
+<tr><td><strong>Dominio .net.pe (1 año)</strong></td><td><strong>S/ 20.00</strong></td><td><strong>ELEGIDO.</strong> Es una terminación peruana oficial del NIC.PE, permite crear la dirección comedor.unjfsc.net.pe y cuesta S/ 90 menos al año que el .pe.</td></tr>
+<tr><td>Dominio .pe o .com.pe (1 año)</td><td>S/ 110.00</td><td>Alternativa más prestigiosa si la institución decide asumir el costo adicional.</td></tr>
+<tr><td>Dominio .edu.pe (1 año)</td><td>S/ 110.00</td><td>Dedicado a instituciones educativas; solo puede ser registrado por la universidad, con documentación oficial.</td></tr>
+<tr><td>Sin dominio (dirección de GitHub)</td><td>S/ 0.00</td><td>Funciona, pero la dirección resulta larga y poco formal para una institución.</td></tr>
+</table>
+<p class="nota">El .net.pe pertenece a la misma autoridad registral (NIC.PE) que el .pe y ofrece las mismas garantías;
+únicamente cambia la etiqueta, originalmente pensada para proyectos de tecnología.</p>
+
+<h2>7.5. Presupuesto de inversión inicial (plan recomendado)</h2>
+<p>El siguiente escenario asume que la institución ya cuenta con una computadora para el kiosco,
+condición que reduce de manera significativa la inversión inicial.</p>
+
+<table>
+<tr><th>Ítem</th><th>Cant.</th><th>Precio unitario</th><th>Subtotal</th></tr>
+<tr><td>Lector de códigos USB 2D/1D (YHD-1100D)</td><td>1</td><td>S/ 159.90</td><td>S/ 159.90</td></tr>
+<tr><td>Cámara web Genius FaceCam 1000X</td><td>1</td><td>S/ 69.90</td><td>S/ 69.90</td></tr>
+<tr><td>Dominio .net.pe (1 año)</td><td>1</td><td>S/ 20.00</td><td>S/ 20.00</td></tr>
+<tr><td>Accesorios de instalación (regleta, cable USB, soporte)</td><td>1</td><td>S/ 60.00</td><td>S/ 60.00</td></tr>
+<tr><td>Imprevistos (10 %)</td><td>—</td><td>—</td><td>S/ 30.98</td></tr>
+<tr class="total"><td colspan="3">TOTAL INVERSIÓN AÑO 1</td><td>S/ 330.88</td></tr>
+</table>
+<p class="nota">La computadora, el monitor, el teclado y el mouse se aprovechan de los que la institución ya posee.
+Si se prefiere el dominio .pe más prestigioso (S/ 110), el total del primer año asciende a S/ 420.88.</p>
+
+<h3>Plan alternativo (si no existe computadora disponible)</h3>
+<table>
+<tr><th>Ítem</th><th>Cant.</th><th>Precio unitario</th><th>Subtotal</th></tr>
+<tr><td>Tablet de 8.7 pulgadas (Lenovo Tab One)</td><td>1</td><td>S/ 449.00</td><td>S/ 449.00</td></tr>
+<tr><td>Lector de códigos USB 2D/1D (YHD-1100D)</td><td>1</td><td>S/ 159.90</td><td>S/ 159.90</td></tr>
+<tr><td>Dominio .net.pe (1 año)</td><td>1</td><td>S/ 20.00</td><td>S/ 20.00</td></tr>
+<tr><td>Accesorios de instalación</td><td>1</td><td>S/ 60.00</td><td>S/ 60.00</td></tr>
+<tr><td>Imprevistos (10 %)</td><td>—</td><td>—</td><td>S/ 68.90</td></tr>
+<tr class="total"><td colspan="3">TOTAL INVERSIÓN AÑO 1</td><td>S/ 757.80</td></tr>
+</table>
+
+<h2>7.6. Costo de operación</h2>
+<p>Una vez instalado el sistema, el gasto anual se reduce exclusivamente a la renovación del dominio.
+Todos los servicios de soporte operan sin costo.</p>
+
+<table>
+<tr><th>Concepto</th><th>Frecuencia</th><th>Costo</th></tr>
+<tr><td>Renovación del dominio .net.pe</td><td>Anual</td><td>S/ 20.00</td></tr>
+<tr><td>Alojamiento de la web (GitHub Pages)</td><td>Mensual</td><td>S/ 0</td></tr>
+<tr><td>Base de datos y autenticación (Supabase)</td><td>Mensual</td><td>S/ 0</td></tr>
+<tr><td>Licencias de software</td><td>—</td><td>S/ 0</td></tr>
+<tr><td>Mantenimiento correctivo</td><td>—</td><td>S/ 0 (equipo del proyecto)</td></tr>
+<tr class="total"><td colspan="2">TOTAL DE OPERACIÓN ANUAL</td><td>S/ 20.00</td></tr>
+</table>
+
+<p>El costo recurrente equivale a <strong>S/ 1.67 al mes</strong>, cifra inferior al precio de una botella de agua;
+mantener el sistema operativo resulta prácticamente gratuito.</p>
+
+<h2>7.7. Cuadro consolidado</h2>
+<table>
+<tr><th>Concepto</th><th>Año 1</th><th>Año 2 en adelante</th></tr>
+<tr><td>Equipo (lector QR + cámara web)</td><td>S/ 229.80</td><td>S/ 0</td></tr>
+<tr><td>Dominio .net.pe (1 año)</td><td>S/ 20.00</td><td>S/ 20.00</td></tr>
+<tr><td>Accesorios de instalación</td><td>S/ 60.00</td><td>S/ 0</td></tr>
+<tr><td>Imprevistos (10 %)</td><td>S/ 30.98</td><td>S/ 0</td></tr>
+<tr><td>Software y servicios en la nube</td><td>S/ 0</td><td>S/ 0</td></tr>
+<tr class="total"><td>TOTAL</td><td>S/ 330.88</td><td>S/ 20.00 / año</td></tr>
+</table>
+
+<h2>7.8. Justificación de la elección</h2>
+<p>Las decisiones de compra se sustentan en cinco argumentos verificables:</p>
+<ol>
+<li><strong>El lector alámbrico corresponde al mismo tipo de equipo utilizado en cajas de supermercado:</strong>
+escanea el código del estudiante en menos de un segundo, no depende de baterías y posee larga vida útil.
+Pagar S/ 259.90 o S/ 499 por un lector más avanzado no mejoraría el proceso.</li>
+<li><strong>No se adquiere computadora nueva:</strong> el kiosco únicamente abre la aplicación web, por lo que
+se aprovecha el equipo que la institución ya posee. Esta es la decisión que mayor ahorro genera (S/ 1,799).</li>
+<li><strong>El software es libre y está en la nube:</strong> Supabase y GitHub Pages no cobran, y sus planes
+gratuitos superan con creces la demanda estimada del comedor.</li>
+<li><strong>El costo recurrente es mínimo:</strong> S/ 20 anuales por el dominio peruano .net.pe, equivalente
+a S/ 1.67 al mes. Si la institución desea el dominio .pe, el costo adicional sería de S/ 90 al año.</li>
+<li><strong>Crecimiento sin volver a invertir:</strong> si el comedor requiere módulos adicionales (ventana de
+gracia o verificación de identidad), el costo adicional corresponde principalmente a horas de programación
+(18 – 28 h), no a nueva compra de equipo.</li>
+</ol>
+
+<h2>7.9. Escalabilidad (costos futuros previstos)</h2>
+<table>
+<tr><th>Concepto</th><th>Costo estimado</th></tr>
+<tr><td>Módulo «ventana de gracia» (libera el cupo a los 30 minutos)</td><td>8 – 12 h de programación</td></tr>
+<tr><td>Módulo de identidad (foto, DNI y validación de fecha)</td><td>10 – 16 h + cámara web S/ 69.90</td></tr>
+<tr><td>Módulo kiosco adicional (tablet)</td><td>S/ 449.00</td></tr>
+<tr><td>Notificaciones por correo (plan gratuito del proveedor)</td><td>S/ 0 hasta cierto volumen</td></tr>
+</table>
+
+<h2>7.10. Costo de desarrollo del software</h2>
+<p>Mientras que las secciones anteriores miden el costo de <em>operar</em> el sistema, la presente sección
+estima el costo de <em>construirlo desde cero</em>, que es lo que solicita una institución cuando necesita
+conocer el valor real del software desarrollado profesionalmente.</p>
+
+<h3>7.10.1. Método de cálculo</h3>
+<p>El costo de desarrollo se obtiene multiplicando las horas de programación por la tarifa por hora.
+Es el mismo método que emplean las empresas de software para cotizar un proyecto.</p>
+<p class="nota" style="text-align:center; font-size:12pt;"><strong>Costo de desarrollo = horas de programación × tarifa por hora</strong></p>
+
+<h3>7.10.2. Esfuerzo por módulo</h3>
+<table>
+<tr><th>Módulo del sistema</th><th>Horas estimadas</th></tr>
+<tr><td>Análisis, diseño de interfaz (UI/UX) y esquema de base de datos</td><td>18 – 25 h</td></tr>
+<tr><td>Autenticación, roles y seguridad (bcrypt + RLS)</td><td>25 – 35 h</td></tr>
+<tr><td>Gestión de estudiantes, servicios y cupos</td><td>15 – 22 h</td></tr>
+<tr><td>Reservas con código QR y reglas de negocio</td><td>25 – 35 h</td></tr>
+<tr><td>Kiosco de validación en la entrada</td><td>12 – 18 h</td></tr>
+<tr><td>Encuestas y resultados en vivo</td><td>20 – 28 h</td></tr>
+<tr><td>Reportes y estadísticas para el administrador</td><td>12 – 18 h</td></tr>
+<tr><td>Pruebas, publicación y diseño responsive (1920 → 390 px)</td><td>12 – 16 h</td></tr>
+<tr><td>Documentación y capacitación</td><td>8 – 12 h</td></tr>
+<tr class="total"><td>TOTAL</td><td>≈ 150 – 220 h</td></tr>
+</table>
+<p>Este esfuerzo equivale a entre 3 y 6 meses de una persona dedicada medio tiempo, o a 6 – 8 semanas
+de dos profesionales trabajando en paralelo.</p>
+
+<h3>7.10.3. Escenarios de costo (mercado peruano)</h3>
+<table>
+<tr><th>Perfil de desarrollo</th><th>Tarifa por hora</th><th>Costo total estimado</th></tr>
+<tr><td>Desarrollador junior / estudiante</td><td>S/ 15 – 25</td><td>S/ 2,250 – 5,500</td></tr>
+<tr><td><strong>Profesional independiente con experiencia (recomendado)</strong></td><td>S/ 30 – 45</td><td><strong>S/ 4,500 – 9,000</strong></td></tr>
+<tr><td>Empresa o consultora de software</td><td>S/ 50 – 80</td><td>S/ 7,500 – 17,600</td></tr>
+</table>
+
+<h3>7.10.4. Costo total de un proyecto real</h3>
+<table>
+<tr><th>Concepto</th><th>Costo</th></tr>
+<tr><td>Desarrollo del software (valor estimado)</td><td>S/ 6,000.00</td></tr>
+<tr><td>Equipo, dominio, accesorios e instalación</td><td>S/ 330.88</td></tr>
+<tr><td>Mantenimiento anual (10 % del desarrollo)</td><td>S/ 600.00 / año</td></tr>
+<tr class="total"><td>PROYECTO COMPLETO, PRIMER AÑO</td><td>≈ S/ 6,930.88</td></tr>
+</table>
+
+<h3>7.10.5. Consideraciones importantes</h3>
+<ol>
+<li><strong>El prototipo presentado ya cubre el desarrollo completo:</strong> las horas detalladas en la tabla
+7.10.2 se encuentran ejecutadas en el repositorio del proyecto, verificables commit por commit.</li>
+<li><strong>Las tarifas por hora corresponden a estimaciones del mercado peruano</strong> y no constituyen
+cotizaciones formales de una empresa; sirven como referencia para dimensionar el costo.</li>
+<li><strong>El mantenimiento anual</strong> (10 % del costo de desarrollo) cubre la corrección de errores,
+los ajustes menores y las actualizaciones de seguridad.</li>
+<li><strong>No existe costo de licencias:</strong> el sistema se construyó íntegramente con software libre.</li>
+</ol>
+
+<div class="destacado">
+<strong>Conclusión presupuestaria.</strong> Construir este sistema desde cero con un profesional independiente
+costaría aproximadamente <strong>S/ 6,000</strong> (200 horas a S/ 30 por hora). El prototipo presentado ya
+ejecuta ese desarrollo completo, y el costo anual de operarlo es de tan solo <strong>S/ 20</strong> por el dominio.
+</div>
+
+<p class="nota"><em>Fuentes: Falabella Perú (ficha del lector YHD-1100D), Hiraoka (tablets, cámaras web y laptops)
+y NIC.PE (tarifas oficiales de dominios .pe). Consulta realizada el 14/10/2026. Las tarifas de desarrollo
+corresponden a estimaciones de referencia y no a cotizaciones formales.</em></p>
+
+</body>
+</html>

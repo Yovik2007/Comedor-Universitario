@@ -18,6 +18,7 @@ import { Badge, statusBadgeVariant } from "@/components/ui/Badge";
 import { Field, inputCls } from "@/components/ui/Field";
 import { InfoRow } from "@/components/ui/Modal";
 import { formatLong } from "@/utils/dates";
+import { effectiveStatus } from "@/utils/reservationUtils";
 import { formatClock } from "@/utils/text";
 import { BRAND } from "@/data/brand";
 import type { ValidationResultKind } from "@/types";
@@ -33,6 +34,7 @@ const toneStyles = {
   valid: "border-success/40 bg-success-50 text-success-700",
   used: "border-warning/40 bg-warning-50 text-warning-700",
   canceled: "border-danger/40 bg-danger-50 text-danger-700",
+  expired: "border-warning/40 bg-warning-50 text-warning-700",
   not_found: "border-danger/40 bg-danger-50 text-danger-700",
   empty: "border-line bg-surface text-muted",
 } as const;
@@ -50,7 +52,9 @@ export function KioskPage() {
   } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
-  const activeReservations = reservations.filter((r) => r.status === "Activa");
+  const activeReservations = reservations.filter(
+    (r) => effectiveStatus(r) === "Activa",
+  );
   const reservation = result?.reservationId
     ? reservations.find((r) => r.id === result.reservationId)
     : undefined;
@@ -88,7 +92,11 @@ export function KioskPage() {
         reservationId: outcome.reservation?.id,
         message: outcome.message,
       });
-      if (outcome.kind === "not_found" || outcome.kind === "canceled") {
+      if (
+        outcome.kind === "not_found" ||
+        outcome.kind === "canceled" ||
+        outcome.kind === "expired"
+      ) {
         push("error", outcome.message);
       }
     }
@@ -105,7 +113,9 @@ export function KioskPage() {
                 ? "Ya utilizada"
                 : outcome.kind === "canceled"
                   ? "Cancelada"
-                  : "No encontrada",
+                  : outcome.kind === "expired"
+                    ? "Vencida"
+                    : "No encontrada",
           time: new Date().toLocaleTimeString("es-PE", {
             hour: "2-digit",
             minute: "2-digit",
@@ -207,6 +217,7 @@ export function KioskPage() {
                   {result.kind === "valid" && <CheckCircle2 size={30} />}
                   {result.kind === "used" && <AlertTriangle size={30} />}
                   {result.kind === "canceled" && <TicketX size={30} />}
+                  {result.kind === "expired" && <AlertTriangle size={30} />}
                   {result.kind === "not_found" && <CircleX size={30} />}
                   <p className="text-lg font-bold">
                     {result.kind === "valid"
@@ -215,7 +226,9 @@ export function KioskPage() {
                         ? "⚠ Reserva ya utilizada."
                         : result.kind === "canceled"
                           ? "✕ Reserva cancelada."
-                          : "✕ Reserva no encontrada."}
+                          : result.kind === "expired"
+                            ? "⚠ Reserva vencida. Cupo liberado."
+                            : "✕ Reserva no encontrada."}
                   </p>
                 </div>
 
