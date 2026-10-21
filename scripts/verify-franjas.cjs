@@ -179,9 +179,9 @@ check(
 const cena = meal({ id: "cena", inicio: "18:00", fin: "20:00", total: 1500, becarios: 818 });
 const ahora = new Date("2026-10-20T23:31:00.000Z"); // 18:31 local
 check(
-  "cena a las 18:31 -> solo la de 18:30 esta abierta (19:00 abre 18:50)",
+  "cena a las 18:31 -> abiertas 18:30 y 19:00 (la de 19:30 abre 19:00)",
   bookableSlots(cena, "2026-10-20", ahora).map((s) => s.start),
-  ["18:30"],
+  ["18:30", "19:00"],
 );
 check(
   "desayuno por la noche -> ninguna franja reservable",
@@ -189,26 +189,26 @@ check(
   0,
 );
 
-console.log("\\n8) Ventana de apertura automatica (10 min antes)");
-check("LEAD_MINUTES", LEAD_MINUTES, 10);
-check("apertura de la franja 12:00", slotOpenTime("12:00"), "11:50");
-check("apertura de la franja 12:30", slotOpenTime("12:30"), "12:20");
-check("apertura de la franja 14:00", slotOpenTime("14:00"), "13:50");
+console.log("\\n8) Ventana de apertura automatica (30 min antes)");
+check("LEAD_MINUTES", LEAD_MINUTES, 30);
+check("apertura de la franja 12:00", slotOpenTime("12:00"), "11:30");
+check("apertura de la franja 12:30", slotOpenTime("12:30"), "12:00");
+check("apertura de la franja 14:00", slotOpenTime("14:00"), "13:30");
 check(
-  "11:49:59 -> la franja 12:00 todavia no abre",
-  slotNotYetOpen("2026-10-20", "12:00", new Date("2026-10-20T11:49:59")),
+  "11:29:59 -> la franja 12:00 todavia no abre",
+  slotNotYetOpen("2026-10-20", "12:00", new Date("2026-10-20T11:29:59")),
   true,
 );
 check(
-  "11:50:00 exacto -> la franja 12:00 ya abre",
-  slotNotYetOpen("2026-10-20", "12:00", new Date("2026-10-20T11:50:00")),
+  "11:30:00 exacto -> la franja 12:00 ya abre",
+  slotNotYetOpen("2026-10-20", "12:00", new Date("2026-10-20T11:30:00")),
   false,
 );
 check(
-  "slotOpensAt devuelve 11:50 local",
+  "slotOpensAt devuelve 11:30 local",
   (() => { const d = slotOpensAt("2026-10-20", "12:00");
     return d.getHours() * 60 + d.getMinutes(); })(),
-  710,
+  690,
 );
 const alm = meal({ id: "almuerzo", inicio: "12:00", fin: "14:30", total: 3000, becarios: 1637 });
 check(
@@ -217,19 +217,19 @@ check(
   0,
 );
 check(
-  "a las 11:55 solo abrio la de 12:00",
-  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T11:55:00")).map((s) => s.start),
+  "a las 11:40 solo abrio la de 12:00",
+  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T11:40:00")).map((s) => s.start),
   ["12:00"],
 );
 check(
-  "a las 12:10 solo sigue la de 12:00",
+  "a las 12:10 ya abrieron 12:00 y 12:30",
   bookableSlots(alm, "2026-10-20", new Date("2026-10-20T12:10:00")).map((s) => s.start),
-  ["12:00"],
+  ["12:00", "12:30"],
 );
 check(
-  "a las 12:40 la de 12:00 vencio y la de 13:00 aun no abre",
+  "a las 12:40 la de 12:00 vencio pero ya abrio la de 13:00",
   bookableSlots(alm, "2026-10-20", new Date("2026-10-20T12:40:00")).map((s) => s.start),
-  ["12:30"],
+  ["12:30", "13:00"],
 );
 check(
   "a las 13:55 solo 13:30 y 14:00 estan vigentes (las demas ya vencieron)",

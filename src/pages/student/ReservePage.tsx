@@ -28,6 +28,8 @@ import {
   slotNotYetOpen,
   slotOpenTime,
   slotOccupancy,
+  GRACE_MINUTES,
+  LEAD_MINUTES,
 } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
 import type {
@@ -272,15 +274,17 @@ function SlotPicker({
       ) : (
         slots.every((s) => slotNotYetOpen(date, s.start)) && (
           <p className="mt-2 rounded-lg bg-surface px-3 py-2 text-xs font-medium text-muted">
-            Las franjas se habilitan <strong>10 minutos antes</strong> de su
-            hora. Todavía no se puede reservar.
+            Las franjas se habilitan{" "}
+            <strong>{LEAD_MINUTES} minutos antes</strong> de su hora. Todavía
+            no se puede reservar.
           </p>
         )
       )}
 
       <p className="mt-2 text-xs leading-relaxed text-muted">
-        Cada franja se abre sola <strong>10 minutos antes</strong> de su hora.
-        Luego tienes <strong>30 minutos</strong> desde el inicio de tu franja
+        Cada franja se abre sola <strong>{LEAD_MINUTES} minutos antes</strong>{" "}
+        de su hora. Luego tienes{" "}
+        <strong>{GRACE_MINUTES} minutos</strong> desde el inicio de tu franja
         para presentarte; si no llegas, el cupo se libera automáticamente para
         otro estudiante.
       </p>

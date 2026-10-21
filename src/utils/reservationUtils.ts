@@ -29,11 +29,11 @@ export const GRACE_MINUTES = 30;
 
 /**
  * Minutos de anticipación con que cada franja empieza a poder reservarse.
- * La franja de las 12:00 se habilita a las 11:50, la de 12:30 a las 12:20,
- * y así sucesivamente. Sin este plazo un servicio entero se llenaría muchas
- * horas antes de servirse.
+ * Con 30, la franja de las 12:00 se habilita a las 11:30, la de 12:30 a
+ * las 12:00, y así sucesivamente. Sin este plazo un servicio entero se
+ * llenaría muchas horas antes de servirse.
  */
-export const LEAD_MINUTES = 10;
+export const LEAD_MINUTES = 30;
 
 /** Una franja de llegada: de 12:00 a 12:30, por ejemplo. */
 export interface MealSlot {

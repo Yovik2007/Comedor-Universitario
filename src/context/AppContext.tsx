@@ -642,8 +642,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // Franja todavía no habilitada: cada una se abre sola, 10 minutos
-      // antes de su hora.
+      // Franja todavía no habilitada: cada una se abre sola, `LEAD_MINUTES`
+      // minutos antes de su hora.
       if (slotNotYetOpen(date, chosen.start, now)) {
         return {
           ok: false,
