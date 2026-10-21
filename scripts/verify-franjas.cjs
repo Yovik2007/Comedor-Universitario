@@ -20,7 +20,7 @@ function entryWrite() {
   fs.writeFileSync(
     entry,
     `
-import { buildSlots, slotLimit, computeMealStats, effectiveStatus, expiresAtISO, slotOccupancy, validateReservationCode, blockingReservation, slotIsPast, bookableSlots, SLOT_MINUTES, GRACE_MINUTES } from "@/utils/reservationUtils";
+import { buildSlots, slotLimit, computeMealStats, effectiveStatus, expiresAtISO, slotOccupancy, validateReservationCode, blockingReservation, slotIsPast, slotNotYetOpen, slotOpenTime, slotOpensAt, bookableSlots, SLOT_MINUTES, GRACE_MINUTES, LEAD_MINUTES } from "@/utils/reservationUtils";
 import { minutesToTime, timeToMinutes } from "@/utils/dates";
 import type { Meal, Reservation } from "@/types";
 
@@ -179,14 +179,62 @@ check(
 const cena = meal({ id: "cena", inicio: "18:00", fin: "20:00", total: 1500, becarios: 818 });
 const ahora = new Date("2026-10-20T23:31:00.000Z"); // 18:31 local
 check(
-  "cena a las 18:31 -> quedan 3 de 4 franjas",
+  "cena a las 18:31 -> solo la de 18:30 esta abierta (19:00 abre 18:50)",
   bookableSlots(cena, "2026-10-20", ahora).map((s) => s.start),
-  ["18:30", "19:00", "19:30"],
+  ["18:30"],
 );
 check(
   "desayuno por la noche -> ninguna franja reservable",
   bookableSlots(meal({ id: "desayuno", inicio: "07:00", fin: "09:00", total: 1000, becarios: 546 }), "2026-10-20", ahora).length,
   0,
+);
+
+console.log("\\n8) Ventana de apertura automatica (10 min antes)");
+check("LEAD_MINUTES", LEAD_MINUTES, 10);
+check("apertura de la franja 12:00", slotOpenTime("12:00"), "11:50");
+check("apertura de la franja 12:30", slotOpenTime("12:30"), "12:20");
+check("apertura de la franja 14:00", slotOpenTime("14:00"), "13:50");
+check(
+  "11:49:59 -> la franja 12:00 todavia no abre",
+  slotNotYetOpen("2026-10-20", "12:00", new Date("2026-10-20T11:49:59")),
+  true,
+);
+check(
+  "11:50:00 exacto -> la franja 12:00 ya abre",
+  slotNotYetOpen("2026-10-20", "12:00", new Date("2026-10-20T11:50:00")),
+  false,
+);
+check(
+  "slotOpensAt devuelve 11:50 local",
+  (() => { const d = slotOpensAt("2026-10-20", "12:00");
+    return d.getHours() * 60 + d.getMinutes(); })(),
+  710,
+);
+const alm = meal({ id: "almuerzo", inicio: "12:00", fin: "14:30", total: 3000, becarios: 1637 });
+check(
+  "a las 11:00 ninguna franja del almuerzo se puede reservar",
+  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T11:00:00")).length,
+  0,
+);
+check(
+  "a las 11:55 solo abrio la de 12:00",
+  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T11:55:00")).map((s) => s.start),
+  ["12:00"],
+);
+check(
+  "a las 12:10 solo sigue la de 12:00",
+  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T12:10:00")).map((s) => s.start),
+  ["12:00"],
+);
+check(
+  "a las 12:40 la de 12:00 vencio y la de 13:00 aun no abre",
+  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T12:40:00")).map((s) => s.start),
+  ["12:30"],
+);
+check(
+  "a las 13:55 solo 13:30 y 14:00 estan vigentes (las demas ya vencieron)",
+  bookableSlots(alm, "2026-10-20", new Date("2026-10-20T13:55:00")).map((s) => s.start),
+  ["13:30", "14:00"],
 );
 
 console.log("");

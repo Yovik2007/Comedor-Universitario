@@ -22,8 +22,11 @@ import { formatShort, todayISO } from "@/utils/dates";
 import {
   availableForType,
   buildSlots,
+  bookableSlots,
   effectiveStatus,
   slotIsPast,
+  slotNotYetOpen,
+  slotOpenTime,
   slotOccupancy,
 } from "@/utils/reservationUtils";
 import type { MealStats } from "@/utils/reservationUtils";
@@ -46,10 +49,13 @@ export function ReservePage() {
   const openConfirm = (meal: Meal) => {
     const slots = buildSlots(meal);
     const occupancy = slotOccupancy(meal, reservations, today);
-    // Por defecto se preselecciona la primera franja libre que aún no pasó.
+    // Por defecto se preselecciona la primera franja libre que ya está
+    // abierta y todavía no pasó.
     const firstFree = slots.find(
       (s) =>
-        (occupancy[s.start] ?? 0) < s.limit && !slotIsPast(today, s.start),
+        (occupancy[s.start] ?? 0) < s.limit &&
+        !slotIsPast(today, s.start) &&
+        !slotNotYetOpen(today, s.start),
     );
     setSelectedSlot(firstFree?.start ?? null);
     setConfirmMeal(meal);
@@ -108,9 +114,14 @@ export function ReservePage() {
               r.date === today &&
               r.status !== "Cancelada",
           );
-          const slotsAvailable = buildSlots(meal).some(
-            (s) => !slotIsPast(today, s.start),
-          );
+          const slots = buildSlots(meal);
+          const firstSlot = slots[0];
+          const slotsAvailable = bookableSlots(meal, today).length > 0;
+          const allPast = slots.every((s) => slotIsPast(today, s.start));
+          const opensAtLabel =
+            firstSlot && slotNotYetOpen(today, firstSlot.start)
+              ? slotOpenTime(firstSlot.start)
+              : null;
 
           return (
             <MealCard
@@ -125,6 +136,8 @@ export function ReservePage() {
               }
               reservationsOpen={reservationsOpen && meal.habilitado}
               slotsAvailable={slotsAvailable}
+              allPast={allPast}
+              opensAtLabel={opensAtLabel}
               onReserve={() => openConfirm(meal)}
             />
           );
@@ -211,8 +224,9 @@ function SlotPicker({
           const used = occupancy[slot.start] ?? 0;
           const free = Math.max(slot.limit - used, 0);
           const past = slotIsPast(date, slot.start);
+          const waiting = slotNotYetOpen(date, slot.start);
           const full = free <= 0;
-          const disabled = full || past;
+          const disabled = full || past || waiting;
           const isSelected = selected === slot.start;
 
           return (
@@ -238,23 +252,37 @@ function SlotPicker({
                   isSelected ? "text-white/85" : "text-muted"
                 }`}
               >
-                {past ? "Ya pasó" : full ? "Llena" : `${free} cupos`}
+                {past
+                  ? "Ya pasó"
+                  : waiting
+                    ? `Abre ${slotOpenTime(slot.start)}`
+                    : full
+                      ? "Llena"
+                      : `${free} cupos`}
               </span>
             </button>
           );
         })}
       </div>
 
-      {slots.every((s) => slotIsPast(date, s.start)) && (
+      {slots.every((s) => slotIsPast(date, s.start)) ? (
         <p className="mt-2 rounded-lg bg-warning-50 px-3 py-2 text-xs font-medium text-warning-700 ring-1 ring-warning/25">
           Todas las franjas de este servicio ya pasaron.
         </p>
+      ) : (
+        slots.every((s) => slotNotYetOpen(date, s.start)) && (
+          <p className="mt-2 rounded-lg bg-surface px-3 py-2 text-xs font-medium text-muted">
+            Las franjas se habilitan <strong>10 minutos antes</strong> de su
+            hora. Todavía no se puede reservar.
+          </p>
+        )
       )}
 
       <p className="mt-2 text-xs leading-relaxed text-muted">
-        Tienes <strong>30 minutos</strong> desde el inicio de tu franja para
-        presentarte. Si no llegas, el cupo se libera automáticamente para otro
-        estudiante.
+        Cada franja se abre sola <strong>10 minutos antes</strong> de su hora.
+        Luego tienes <strong>30 minutos</strong> desde el inicio de tu franja
+        para presentarte; si no llegas, el cupo se libera automáticamente para
+        otro estudiante.
       </p>
     </div>
   );
@@ -273,8 +301,12 @@ interface MealCardProps {
   /** Estado de la reserva del estudiante para este servicio hoy (si existe). */
   myStatus: ReservationStatus | null;
   reservationsOpen: boolean;
-  /** ¿Queda alguna franja de 30 min que aún no haya pasado? */
+  /** ¿Queda alguna franja que se pueda reservar ahora mismo? */
   slotsAvailable: boolean;
+  /** Todas las franjas del servicio ya pasaron. */
+  allPast: boolean;
+  /** Hora a la que abre la primera franja, si todavía no abrió. */
+  opensAtLabel: string | null;
   onReserve: () => void;
 }
 
@@ -287,13 +319,17 @@ function MealCard({
   myStatus,
   reservationsOpen,
   slotsAvailable,
+  allPast,
+  opensAtLabel,
   onReserve,
 }: MealCardProps) {
   // Opción A: un intento por servicio y fecha. Si la reserva venció, su cupo
   // ya se transfirió a los libres y este estudiante no puede reservar otra vez.
   const reservedByMe = myStatus === "Activa" || myStatus === "Utilizada";
   const expired = myStatus === "Vencida";
-  const finished = !slotsAvailable && myStatus === null;
+  const finished = !slotsAvailable && allPast && myStatus === null;
+  const notYetOpen =
+    !slotsAvailable && opensAtLabel !== null && myStatus === null;
   const soldOut = remaining <= 0 && !reservedByMe;
 
   return (
@@ -322,6 +358,8 @@ function MealCard({
           </Badge>
         ) : finished ? (
           <Badge variant="neutral">Finalizado</Badge>
+        ) : notYetOpen ? (
+          <Badge variant="neutral">Aún no abre</Badge>
         ) : !reservationsOpen ? (
           <Badge variant="warning">Cerrado</Badge>
         ) : soldOut ? (
@@ -427,6 +465,10 @@ function MealCard({
         ) : finished ? (
           <Button fullWidth variant="outline" disabled icon={<Lock size={16} />}>
             Servicio finalizado hoy
+          </Button>
+        ) : notYetOpen ? (
+          <Button fullWidth variant="outline" disabled icon={<Lock size={16} />}>
+            Abre a las {opensAtLabel}
           </Button>
         ) : soldOut ? (
           <Button fullWidth disabled icon={<Lock size={16} />}>

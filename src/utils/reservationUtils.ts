@@ -27,6 +27,14 @@ export const SLOT_MINUTES = 30;
  */
 export const GRACE_MINUTES = 30;
 
+/**
+ * Minutos de anticipación con que cada franja empieza a poder reservarse.
+ * La franja de las 12:00 se habilita a las 11:50, la de 12:30 a las 12:20,
+ * y así sucesivamente. Sin este plazo un servicio entero se llenaría muchas
+ * horas antes de servirse.
+ */
+export const LEAD_MINUTES = 10;
+
 /** Una franja de llegada: de 12:00 a 12:30, por ejemplo. */
 export interface MealSlot {
   /** Inicio "12:00" */
@@ -96,13 +104,42 @@ export function slotIsPast(
   return new Date(expiresAtISO(date, slotStart)).getTime() <= now.getTime();
 }
 
+/**
+ * Momento exacto en que una franja empieza a poder reservarse:
+ * inicio de la franja menos la anticipación.
+ */
+export function slotOpensAt(date: string, slotStart: string): Date {
+  const d = new Date(`${date}T${slotStart}:00`);
+  d.setMinutes(d.getMinutes() - LEAD_MINUTES);
+  return d;
+}
+
+/** "11:50" — la hora a la que se habilita una franja. */
+export function slotOpenTime(slotStart: string): string {
+  return minutesToTime(timeToMinutes(slotStart) - LEAD_MINUTES);
+}
+
+/**
+ * true si una franja **todavía no se ha habilitado**. Cada franja se abre
+ * sola, `LEAD_MINUTES` antes de su hora.
+ */
+export function slotNotYetOpen(
+  date: string,
+  slotStart: string,
+  now: Date = new Date(),
+): boolean {
+  return now.getTime() < slotOpensAt(date, slotStart).getTime();
+}
+
 /** Franjas de un servicio que todavía se pueden reservar. */
 export function bookableSlots(
   meal: Meal,
   date: string,
   now: Date = new Date(),
 ): MealSlot[] {
-  return buildSlots(meal).filter((s) => !slotIsPast(date, s.start, now));
+  return buildSlots(meal).filter(
+    (s) => !slotIsPast(date, s.start, now) && !slotNotYetOpen(date, s.start, now),
+  );
 }
 
 /**

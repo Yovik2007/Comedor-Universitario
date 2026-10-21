@@ -54,6 +54,8 @@ import {
   freeQuota,
   generateReservationCode,
   slotIsPast,
+  slotNotYetOpen,
+  slotOpenTime,
   slotOccupancy,
   validateReservationCode,
 } from "@/utils/reservationUtils";
@@ -637,6 +639,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return {
           ok: false,
           message: `La franja ${chosen.label} ya pasó. Elige una franja posterior.`,
+        };
+      }
+
+      // Franja todavía no habilitada: cada una se abre sola, 10 minutos
+      // antes de su hora.
+      if (slotNotYetOpen(date, chosen.start, now)) {
+        return {
+          ok: false,
+          message: `La franja ${chosen.label} se habilita a las ${slotOpenTime(chosen.start)}.`,
         };
       }
 
